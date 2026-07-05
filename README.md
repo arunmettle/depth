@@ -31,6 +31,9 @@ The web app and engine are both now executable, and the current focus is live pr
 
 ## Live validation
 
+- Goal 5 engine validation runbook: `docs/goal-5-live-validation.md`
+- Goal 5 engine validation script: `node scripts/validate-goal-5.mjs`
+- Windows helper runner: `powershell -ExecutionPolicy Bypass -File .\scripts\run-goal-5-validation.ps1`
 - Goal 8 validation runbook: `docs/goal-8-live-validation.md`
 - Goal 8 validation script: `node scripts/validate-goal-8.mjs`
 - The script can now optionally trigger a real validation alert first when `VALIDATION_TRIGGER_ALERT=true`
