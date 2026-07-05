@@ -206,6 +206,7 @@ Builds the minimal reliable live market engine that can ingest, normalize, and m
 - Engine health responses now expose a direct stream freshness signal, making stale-data diagnosis clearer for operators
 - Engine `/readyz` now reports a concrete warm-up reason such as disconnected, stale, waiting for market data, or waiting for rule sync
 - Engine readiness reasoning now lives in one engine-level path with focused branch coverage, reducing drift between runtime state and HTTP readiness reporting
+- Engine websocket shutdown now unwinds cleanly on context cancel and records a proper disconnected state, improving production lifecycle reliability
 
 ### To Achieve
 

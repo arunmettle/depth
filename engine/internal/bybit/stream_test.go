@@ -6,8 +6,13 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/gorilla/websocket"
 
 	"sentinelflow/engine/internal/alerts"
 	"sentinelflow/engine/internal/config"
@@ -543,6 +548,94 @@ func TestTriggerValidationAlertCreatesEvaluatedRecord(t *testing.T) {
 	status := stream.Status()
 	if len(status.Evaluator.RecentAlerts) != 1 {
 		t.Fatalf("expected validation alert to be recorded, got %d records", len(status.Evaluator.RecentAlerts))
+	}
+}
+
+func TestRunStopsAndMarksDisconnectedOnContextCancel(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	upgrader := websocket.Upgrader{}
+	serverReady := make(chan struct{}, 1)
+
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		connection, err := upgrader.Upgrade(writer, request, nil)
+		if err != nil {
+			t.Errorf("upgrade websocket: %v", err)
+			return
+		}
+		defer connection.Close()
+
+		serverReady <- struct{}{}
+
+		for {
+			if _, _, err := connection.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}))
+	defer server.Close()
+
+	stream := NewPublicTradeStream(config.Config{
+		BybitSymbols:      []string{"BTCUSDT"},
+		BybitWebSocketURL: "ws" + strings.TrimPrefix(server.URL, "http"),
+		PingInterval:      time.Hour,
+	}, logger)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		stream.Run(ctx)
+		close(done)
+	}()
+
+	select {
+	case <-serverReady:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for websocket server connection")
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		status := stream.Status()
+		if status.Connected {
+			break
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for stream to report connected")
+		}
+
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for stream run loop to stop after cancel")
+	}
+
+	status := stream.Status()
+	if status.Connected {
+		t.Fatal("expected stream to report disconnected after cancel")
+	}
+
+	if status.ReconnectAttempts != 1 {
+		t.Fatalf("expected one reconnect attempt, got %d", status.ReconnectAttempts)
+	}
+
+	if status.LastConnectAt.IsZero() {
+		t.Fatal("expected last connect time to be recorded")
+	}
+
+	if status.LastDisconnectAt.IsZero() {
+		t.Fatal("expected last disconnect time to be recorded")
+	}
+
+	if status.LastError != "" {
+		t.Fatalf("expected cancel shutdown to avoid sticky last error, got %q", status.LastError)
 	}
 }
 

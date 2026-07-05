@@ -170,15 +170,19 @@ func (s *PublicTradeStream) Run(ctx context.Context) {
 		}
 
 		err := s.connectAndStream(ctx)
-		if err != nil && !errors.Is(err, context.Canceled) {
+		if errors.Is(err, context.Canceled) {
+			s.setDisconnected(nil)
+			return
+		}
+
+		if err != nil {
 			s.logger.Warn("bybit stream loop ended", slog.Any("error", err))
 			s.setDisconnected(err)
 		}
 
-		select {
-		case <-ctx.Done():
+		if err := s.sleep(ctx, backoff); err != nil {
+			s.setDisconnected(nil)
 			return
-		case <-time.After(backoff):
 		}
 
 		if backoff < 15*time.Second {
@@ -285,6 +289,16 @@ func (s *PublicTradeStream) connectAndStream(ctx context.Context) error {
 	}
 	defer connection.Close()
 
+	connectionClosed := make(chan struct{})
+	defer close(connectionClosed)
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = connection.Close()
+		case <-connectionClosed:
+		}
+	}()
+
 	s.setConnected()
 
 	if err := connection.WriteJSON(subscribeMessage{
@@ -307,9 +321,15 @@ func (s *PublicTradeStream) connectAndStream(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case err := <-readDone:
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			return err
 		case <-pingTicker.C:
 			if err := connection.WriteJSON(pingMessage{Op: "ping"}); err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				return fmt.Errorf("write ping: %w", err)
 			}
 		}
@@ -326,6 +346,9 @@ func (s *PublicTradeStream) readLoop(ctx context.Context, connection *websocket.
 
 		_, payload, err := connection.ReadMessage()
 		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			return fmt.Errorf("read websocket message: %w", err)
 		}
 
