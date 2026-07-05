@@ -351,7 +351,15 @@ export function AlertRuleForm({ selectedRule }: AlertRuleFormProps) {
       </FieldGroup>
 
       {state.message ? (
-        <p className="text-sm text-muted-foreground">{state.message}</p>
+        <p
+          className={
+            state.status === "success"
+              ? "text-sm text-foreground"
+              : "text-sm text-muted-foreground"
+          }
+        >
+          {state.message}
+        </p>
       ) : null}
 
       <div className="flex flex-col gap-3 sm:flex-row">
