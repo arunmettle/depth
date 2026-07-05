@@ -152,3 +152,68 @@ func TestHandleReadyReportsStaleStreamReason(t *testing.T) {
 		t.Fatalf("expected stream-stale reason, got %s", payload.Reason)
 	}
 }
+
+func TestHandleReadyReportsDisconnectedReason(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	stream := bybit.NewPublicTradeStream(config.Config{
+		BybitSymbols: []string{"BTCUSDT"},
+	}, logger)
+
+	application := New(config.Config{
+		BybitSymbols: []string{"BTCUSDT"},
+	}, logger, stream)
+
+	request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	recorder := httptest.NewRecorder()
+
+	application.Routes().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected warming ready response, got %d", recorder.Code)
+	}
+
+	var payload statusResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal ready payload: %v", err)
+	}
+
+	if payload.Reason != "stream-disconnected" {
+		t.Fatalf("expected stream-disconnected reason, got %s", payload.Reason)
+	}
+}
+
+func TestHandleReadyReportsRuleSyncReason(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	stream := bybit.NewPublicTradeStream(config.Config{
+		BybitSymbols: []string{"BTCUSDT"},
+		PingInterval: 20 * time.Second,
+	}, logger)
+	now := time.Date(2026, 7, 6, 10, 5, 0, 0, time.UTC)
+	stream.SetNowForTests(func() time.Time { return now })
+	stream.MarkConnectedForTests()
+	stream.RecordMessageForTests()
+
+	application := New(config.Config{
+		BybitSymbols:      []string{"BTCUSDT"},
+		SupabaseURL:       "https://example.supabase.co",
+		SupabaseSecretKey: "service-role",
+	}, logger, stream)
+
+	request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	recorder := httptest.NewRecorder()
+
+	application.Routes().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected warming ready response, got %d", recorder.Code)
+	}
+
+	var payload statusResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal ready payload: %v", err)
+	}
+
+	if payload.Reason != "waiting-for-rule-sync" {
+		t.Fatalf("expected waiting-for-rule-sync reason, got %s", payload.Reason)
+	}
+}

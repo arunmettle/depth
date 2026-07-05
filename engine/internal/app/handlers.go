@@ -133,23 +133,13 @@ func (a *App) handleReady(writer http.ResponseWriter, request *http.Request) {
 	status := "warming"
 	reason := "waiting-for-market-data"
 
-	streamStatus := a.tradeStream.Status()
-	streamReady := a.tradeStream.Ready()
-	rulesReady := a.tradeStream.RulesReady(a.config.HasSupabaseRuleSource())
-
-	switch {
-	case streamReady && rulesReady:
+	ready, readinessReason := a.tradeStream.Readiness(a.config.HasSupabaseRuleSource())
+	if ready {
 		statusCode = http.StatusOK
 		status = "ready"
 		reason = ""
-	case !streamStatus.Connected:
-		reason = "stream-disconnected"
-	case streamStatus.LastMessageAt.IsZero():
-		reason = "waiting-for-market-data"
-	case !a.tradeStream.LastMessageFresh(streamStatus.LastMessageAt):
-		reason = "stream-stale"
-	case !rulesReady:
-		reason = "waiting-for-rule-sync"
+	} else if readinessReason != "" {
+		reason = readinessReason
 	}
 
 	a.writeJSON(writer, statusCode, statusResponse{

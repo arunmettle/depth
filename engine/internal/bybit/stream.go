@@ -201,12 +201,8 @@ func (s *PublicTradeStream) Status() Status {
 }
 
 func (s *PublicTradeStream) Ready() bool {
-	status := s.Status()
-	if !status.Connected || status.LastMessageAt.IsZero() {
-		return false
-	}
-
-	return s.lastMessageFresh(status.LastMessageAt)
+	ready, _ := s.Readiness(false)
+	return ready
 }
 
 func (s *PublicTradeStream) lastMessageFresh(lastMessageAt time.Time) bool {
@@ -232,6 +228,43 @@ func (s *PublicTradeStream) RulesReady(requireSync bool) bool {
 	}
 
 	status := s.Status()
+	if status.Evaluator.LastRuleSyncErr != "" {
+		return false
+	}
+
+	if status.Evaluator.LastRuleSyncAt.IsZero() {
+		return false
+	}
+
+	return true
+}
+
+func (s *PublicTradeStream) Readiness(requireRuleSync bool) (bool, string) {
+	status := s.Status()
+	if !status.Connected {
+		return false, "stream-disconnected"
+	}
+
+	if status.LastMessageAt.IsZero() {
+		return false, "waiting-for-market-data"
+	}
+
+	if !s.lastMessageFresh(status.LastMessageAt) {
+		return false, "stream-stale"
+	}
+
+	if !s.rulesReadyFromStatus(status, requireRuleSync) {
+		return false, "waiting-for-rule-sync"
+	}
+
+	return true, ""
+}
+
+func (s *PublicTradeStream) rulesReadyFromStatus(status Status, requireSync bool) bool {
+	if !requireSync {
+		return true
+	}
+
 	if status.Evaluator.LastRuleSyncErr != "" {
 		return false
 	}
