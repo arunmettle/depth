@@ -206,12 +206,20 @@ func (s *PublicTradeStream) Ready() bool {
 		return false
 	}
 
+	return s.lastMessageFresh(status.LastMessageAt)
+}
+
+func (s *PublicTradeStream) lastMessageFresh(lastMessageAt time.Time) bool {
+	if lastMessageAt.IsZero() {
+		return false
+	}
+
 	readinessWindow := s.cfg.PingInterval * 2
 	if readinessWindow <= 0 {
 		readinessWindow = 40 * time.Second
 	}
 
-	return s.now().UTC().Sub(status.LastMessageAt) <= readinessWindow
+	return s.now().UTC().Sub(lastMessageAt) <= readinessWindow
 }
 
 func (s *PublicTradeStream) RulesReady(requireSync bool) bool {
@@ -849,4 +857,16 @@ func isAllowedTimeframe(timeframe string) bool {
 	default:
 		return false
 	}
+}
+
+func (s *PublicTradeStream) SetNowForTests(now func() time.Time) {
+	s.now = now
+}
+
+func (s *PublicTradeStream) MarkConnectedForTests() {
+	s.setConnected()
+}
+
+func (s *PublicTradeStream) RecordMessageForTests() {
+	s.recordMessage()
 }

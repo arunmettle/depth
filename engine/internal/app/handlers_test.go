@@ -8,10 +8,55 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"sentinelflow/engine/internal/bybit"
 	"sentinelflow/engine/internal/config"
 )
+
+func TestHandleHealthIncludesFreshnessSignal(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	stream := bybit.NewPublicTradeStream(config.Config{
+		BybitSymbols:  []string{"BTCUSDT"},
+		PingInterval:  20 * time.Second,
+	}, logger)
+	now := time.Date(2026, 7, 6, 9, 45, 0, 0, time.UTC)
+	streamStatusNow := now
+	stream.SetNowForTests(func() time.Time { return streamStatusNow })
+	stream.MarkConnectedForTests()
+	stream.RecordMessageForTests()
+	streamStatusNow = streamStatusNow.Add(41 * time.Second)
+
+	application := New(config.Config{
+		BybitSymbols: []string{"BTCUSDT"},
+	}, logger, stream)
+
+	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	recorder := httptest.NewRecorder()
+
+	application.Routes().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected health response, got %d", recorder.Code)
+	}
+
+	var payload statusResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal health payload: %v", err)
+	}
+
+	if payload.Stream == nil {
+		t.Fatal("expected stream payload")
+	}
+
+	if payload.Stream.Connected != true {
+		t.Fatal("expected connected stream state")
+	}
+
+	if payload.Stream.Fresh {
+		t.Fatal("expected stale stream freshness signal to be false")
+	}
+}
 
 func TestHandleValidationAlertRequiresValidationKey(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))

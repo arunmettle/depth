@@ -22,6 +22,7 @@ type statusResponse struct {
 type streamState struct {
 	Connected         bool           `json:"connected"`
 	Delivery          deliveryState  `json:"delivery"`
+	Fresh             bool           `json:"fresh"`
 	LastConnectAt     string         `json:"lastConnectAt,omitempty"`
 	LastDisconnectAt  string         `json:"lastDisconnectAt,omitempty"`
 	LastError         string         `json:"lastError,omitempty"`
@@ -220,6 +221,7 @@ func (a *App) streamState() *streamState {
 			PersistedWrites:    status.Delivery.PersistedWrites,
 			RetryAttempts:      status.Delivery.RetryAttempts,
 		},
+		Fresh:             a.tradeStream.Ready(),
 		LastError:         status.LastError,
 		MessagesReceived:  status.MessagesReceived,
 		TradesNormalized:  status.TradesNormalized,

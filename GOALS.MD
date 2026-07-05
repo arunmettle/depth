@@ -203,6 +203,7 @@ Builds the minimal reliable live market engine that can ingest, normalize, and m
 - Engine health responses expose stream and candle state
 - Engine test and build baseline established
 - Engine readiness now requires recent market messages instead of staying green indefinitely after the first message, improving stale-stream detection
+- Engine health responses now expose a direct stream freshness signal, making stale-data diagnosis clearer for operators
 
 ### To Achieve
 
