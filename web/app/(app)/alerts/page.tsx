@@ -2,6 +2,7 @@ import { AlertRuleForm } from "@/components/alert-rule-form";
 import { AlertRuleList } from "@/components/alert-rule-list";
 import { getAlertRuleForCurrentUser, getAlertRulesForCurrentUser } from "@/lib/alerts/rules";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -9,6 +10,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 const alertRuleTypes = [
   {
@@ -33,9 +36,30 @@ export default async function AlertsPage({
   const selectedRule = params.edit
     ? await getAlertRuleForCurrentUser(params.edit)
     : null;
+  const editRuleMissing = Boolean(params.edit && !selectedRule);
 
   return (
     <div className="flex flex-col gap-6">
+      {editRuleMissing ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Rule unavailable</CardTitle>
+            <CardDescription>
+              That alert rule could not be loaded for this account. It may have
+              been deleted or may not belong to the current user.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link
+              href="/alerts"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            >
+              Back to new rule
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>

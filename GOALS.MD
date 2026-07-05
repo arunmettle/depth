@@ -163,6 +163,7 @@ Lets users configure high-value alerts through a simple product surface without 
 - Goal 4 now has a reusable live-validation harness for Supabase alert-rule reads and optional owner-scoped CRUD proof
 - A Windows-friendly Goal 4 runner now stamps JSON and markdown validation evidence, including stable latest-copy artifacts
 - Goal 4 validation failure artifacts have been smoke-checked so misconfigured runs still produce actionable setup evidence
+- The alerts page now surfaces a clear recovery state when an edit target is missing or unavailable, reducing edit-flow confusion
 
 ### To Achieve
 
