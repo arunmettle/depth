@@ -202,6 +202,7 @@ Builds the minimal reliable live market engine that can ingest, normalize, and m
 - Rolling in-memory candle history added for evaluator reads
 - Engine health responses expose stream and candle state
 - Engine test and build baseline established
+- Engine readiness now requires recent market messages instead of staying green indefinitely after the first message, improving stale-stream detection
 
 ### To Achieve
 

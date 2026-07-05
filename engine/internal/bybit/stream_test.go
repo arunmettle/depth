@@ -36,7 +36,10 @@ func TestReadyDependsOnConnectionAndMessage(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	stream := NewPublicTradeStream(config.Config{
 		BybitSymbols: []string{"BTCUSDT"},
+		PingInterval: 20 * time.Second,
 	}, logger)
+	now := time.Date(2026, 7, 6, 9, 40, 0, 0, time.UTC)
+	stream.now = func() time.Time { return now }
 
 	if stream.Ready() {
 		t.Fatal("expected stream to start unready")
@@ -50,6 +53,11 @@ func TestReadyDependsOnConnectionAndMessage(t *testing.T) {
 	stream.recordMessage()
 	if !stream.Ready() {
 		t.Fatal("expected connected stream with messages to be ready")
+	}
+
+	now = now.Add(41 * time.Second)
+	if stream.Ready() {
+		t.Fatal("expected stream with stale messages to be unready")
 	}
 
 	stream.setDisconnected(nil)

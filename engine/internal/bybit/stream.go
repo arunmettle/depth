@@ -31,6 +31,7 @@ type PublicTradeStream struct {
 	alertStore      alertRecordStore
 	retryDelays     []time.Duration
 	sleep           func(context.Context, time.Duration) error
+	now             func() time.Time
 	telegramClient  alertPhotoSender
 	telegramTargets alertTargetLookup
 	mu              sync.RWMutex
@@ -143,6 +144,7 @@ func NewPublicTradeStream(cfg config.Config, logger *slog.Logger) *PublicTradeSt
 		alertStore:      alertstore.NewSupabaseStore(cfg.SupabaseURL, cfg.SupabaseSecretKey),
 		retryDelays:     []time.Duration{2 * time.Second, 5 * time.Second},
 		sleep:           sleepWithContext,
+		now:             time.Now,
 		telegramClient:  telegram.NewClient(cfg.TelegramBaseURL, cfg.TelegramBotToken),
 		telegramTargets: telegram.NewConnectionSource(cfg.SupabaseURL, cfg.SupabaseSecretKey),
 		status: Status{
@@ -200,7 +202,16 @@ func (s *PublicTradeStream) Status() Status {
 
 func (s *PublicTradeStream) Ready() bool {
 	status := s.Status()
-	return status.Connected && !status.LastMessageAt.IsZero()
+	if !status.Connected || status.LastMessageAt.IsZero() {
+		return false
+	}
+
+	readinessWindow := s.cfg.PingInterval * 2
+	if readinessWindow <= 0 {
+		readinessWindow = 40 * time.Second
+	}
+
+	return s.now().UTC().Sub(status.LastMessageAt) <= readinessWindow
 }
 
 func (s *PublicTradeStream) RulesReady(requireSync bool) bool {
@@ -348,7 +359,7 @@ func (s *PublicTradeStream) setConnected() {
 	defer s.mu.Unlock()
 
 	s.status.Connected = true
-	s.status.LastConnectAt = time.Now().UTC()
+	s.status.LastConnectAt = s.now().UTC()
 	s.status.LastError = ""
 }
 
@@ -357,7 +368,7 @@ func (s *PublicTradeStream) setDisconnected(err error) {
 	defer s.mu.Unlock()
 
 	s.status.Connected = false
-	s.status.LastDisconnectAt = time.Now().UTC()
+	s.status.LastDisconnectAt = s.now().UTC()
 	if err != nil {
 		s.status.LastError = err.Error()
 	}
@@ -367,7 +378,7 @@ func (s *PublicTradeStream) recordMessage() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.status.LastMessageAt = time.Now().UTC()
+	s.status.LastMessageAt = s.now().UTC()
 	s.status.MessagesReceived++
 }
 
@@ -699,7 +710,7 @@ func (s *PublicTradeStream) recordPersistSuccess(id string) {
 	defer s.mu.Unlock()
 
 	s.status.Delivery.LastAlertID = id
-	s.status.Delivery.LastPersistAt = time.Now().UTC()
+	s.status.Delivery.LastPersistAt = s.now().UTC()
 	s.status.Delivery.LastPersistErr = ""
 	s.status.Delivery.PersistedWrites++
 }
@@ -738,7 +749,7 @@ func (s *PublicTradeStream) recordDelivered(id string) {
 
 	s.status.Delivery.DeliveredAlerts++
 	s.status.Delivery.LastAlertID = id
-	s.status.Delivery.LastDeliveryAt = time.Now().UTC()
+	s.status.Delivery.LastDeliveryAt = s.now().UTC()
 	s.status.Delivery.LastDeliveryErr = ""
 	s.status.Delivery.LastDeliveryStatus = string(alerts.StatusDelivered)
 }
@@ -757,7 +768,7 @@ func (s *PublicTradeStream) SetRules(source string, rules []evaluator.Rule) {
 	s.rules = append([]evaluator.Rule(nil), rules...)
 	s.status.Evaluator.ConfiguredRules = len(rules)
 	s.status.Evaluator.RuleSource = source
-	s.status.Evaluator.LastRuleSyncAt = time.Now().UTC()
+	s.status.Evaluator.LastRuleSyncAt = s.now().UTC()
 	s.status.Evaluator.LastRuleSyncErr = ""
 }
 
