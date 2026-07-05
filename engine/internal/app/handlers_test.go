@@ -113,3 +113,42 @@ func TestHandleValidationAlertAcceptsValidRequest(t *testing.T) {
 		t.Fatalf("expected one validation alert record, got %d", len(status.Evaluator.RecentAlerts))
 	}
 }
+
+func TestHandleReadyReportsStaleStreamReason(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	stream := bybit.NewPublicTradeStream(config.Config{
+		BybitSymbols: []string{"BTCUSDT"},
+		PingInterval: 20 * time.Second,
+	}, logger)
+	now := time.Date(2026, 7, 6, 10, 0, 0, 0, time.UTC)
+	stream.SetNowForTests(func() time.Time { return now })
+	stream.MarkConnectedForTests()
+	stream.RecordMessageForTests()
+	now = now.Add(41 * time.Second)
+
+	application := New(config.Config{
+		BybitSymbols: []string{"BTCUSDT"},
+	}, logger, stream)
+
+	request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	recorder := httptest.NewRecorder()
+
+	application.Routes().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected warming ready response, got %d", recorder.Code)
+	}
+
+	var payload statusResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal ready payload: %v", err)
+	}
+
+	if payload.Status != "warming" {
+		t.Fatalf("expected warming status, got %s", payload.Status)
+	}
+
+	if payload.Reason != "stream-stale" {
+		t.Fatalf("expected stream-stale reason, got %s", payload.Reason)
+	}
+}

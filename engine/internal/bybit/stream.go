@@ -222,6 +222,10 @@ func (s *PublicTradeStream) lastMessageFresh(lastMessageAt time.Time) bool {
 	return s.now().UTC().Sub(lastMessageAt) <= readinessWindow
 }
 
+func (s *PublicTradeStream) LastMessageFresh(lastMessageAt time.Time) bool {
+	return s.lastMessageFresh(lastMessageAt)
+}
+
 func (s *PublicTradeStream) RulesReady(requireSync bool) bool {
 	if !requireSync {
 		return true

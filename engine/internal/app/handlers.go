@@ -13,6 +13,7 @@ import (
 
 type statusResponse struct {
 	Name        string       `json:"name"`
+	Reason      string       `json:"reason,omitempty"`
 	Status      string       `json:"status"`
 	Timestamp   string       `json:"timestamp"`
 	Environment string       `json:"environment"`
@@ -130,14 +131,30 @@ func (a *App) handleHealth(writer http.ResponseWriter, request *http.Request) {
 func (a *App) handleReady(writer http.ResponseWriter, request *http.Request) {
 	statusCode := http.StatusServiceUnavailable
 	status := "warming"
+	reason := "waiting-for-market-data"
 
-	if a.tradeStream.Ready() && a.tradeStream.RulesReady(a.config.HasSupabaseRuleSource()) {
+	streamStatus := a.tradeStream.Status()
+	streamReady := a.tradeStream.Ready()
+	rulesReady := a.tradeStream.RulesReady(a.config.HasSupabaseRuleSource())
+
+	switch {
+	case streamReady && rulesReady:
 		statusCode = http.StatusOK
 		status = "ready"
+		reason = ""
+	case !streamStatus.Connected:
+		reason = "stream-disconnected"
+	case streamStatus.LastMessageAt.IsZero():
+		reason = "waiting-for-market-data"
+	case !a.tradeStream.LastMessageFresh(streamStatus.LastMessageAt):
+		reason = "stream-stale"
+	case !rulesReady:
+		reason = "waiting-for-rule-sync"
 	}
 
 	a.writeJSON(writer, statusCode, statusResponse{
 		Name:        "sentinel-flow-engine",
+		Reason:      reason,
 		Status:      status,
 		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 		Environment: a.config.Environment,
