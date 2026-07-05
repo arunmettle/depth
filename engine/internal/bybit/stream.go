@@ -169,7 +169,7 @@ func (s *PublicTradeStream) Run(ctx context.Context) {
 		default:
 		}
 
-		err := s.connectAndStream(ctx)
+		sessionStarted, err := s.connectAndStream(ctx)
 		if errors.Is(err, context.Canceled) {
 			s.setDisconnected(nil)
 			return
@@ -180,12 +180,16 @@ func (s *PublicTradeStream) Run(ctx context.Context) {
 			s.setDisconnected(err)
 		}
 
+		if sessionStarted {
+			backoff = time.Second
+		}
+
 		if err := s.sleep(ctx, backoff); err != nil {
 			s.setDisconnected(nil)
 			return
 		}
 
-		if backoff < 15*time.Second {
+		if !sessionStarted && backoff < 15*time.Second {
 			backoff *= 2
 		}
 	}
@@ -280,12 +284,12 @@ func (s *PublicTradeStream) rulesReadyFromStatus(status Status, requireSync bool
 	return true
 }
 
-func (s *PublicTradeStream) connectAndStream(ctx context.Context) error {
+func (s *PublicTradeStream) connectAndStream(ctx context.Context) (bool, error) {
 	s.incrementReconnectAttempts()
 
 	connection, _, err := websocket.DefaultDialer.DialContext(ctx, s.cfg.BybitWebSocketURL, nil)
 	if err != nil {
-		return fmt.Errorf("dial bybit websocket: %w", err)
+		return false, fmt.Errorf("dial bybit websocket: %w", err)
 	}
 	defer connection.Close()
 
@@ -305,7 +309,10 @@ func (s *PublicTradeStream) connectAndStream(ctx context.Context) error {
 		Args: buildTopics(s.cfg.BybitSymbols),
 		Op:   "subscribe",
 	}); err != nil {
-		return fmt.Errorf("subscribe to topics: %w", err)
+		if ctx.Err() != nil {
+			return true, ctx.Err()
+		}
+		return true, fmt.Errorf("subscribe to topics: %w", err)
 	}
 
 	readDone := make(chan error, 1)
@@ -319,18 +326,18 @@ func (s *PublicTradeStream) connectAndStream(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return true, ctx.Err()
 		case err := <-readDone:
 			if ctx.Err() != nil {
-				return ctx.Err()
+				return true, ctx.Err()
 			}
-			return err
+			return true, err
 		case <-pingTicker.C:
 			if err := connection.WriteJSON(pingMessage{Op: "ping"}); err != nil {
 				if ctx.Err() != nil {
-					return ctx.Err()
+					return true, ctx.Err()
 				}
-				return fmt.Errorf("write ping: %w", err)
+				return true, fmt.Errorf("write ping: %w", err)
 			}
 		}
 	}

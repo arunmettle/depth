@@ -639,6 +639,67 @@ func TestRunStopsAndMarksDisconnectedOnContextCancel(t *testing.T) {
 	}
 }
 
+func TestRunResetsReconnectBackoffAfterSuccessfulSession(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	upgrader := websocket.Upgrader{}
+	connectionCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		connection, err := upgrader.Upgrade(writer, request, nil)
+		if err != nil {
+			t.Errorf("upgrade websocket: %v", err)
+			return
+		}
+		connectionCount++
+		_ = connection.Close()
+	}))
+	defer server.Close()
+
+	stream := NewPublicTradeStream(config.Config{
+		BybitSymbols:      []string{"BTCUSDT"},
+		BybitWebSocketURL: "ws" + strings.TrimPrefix(server.URL, "http"),
+		PingInterval:      time.Hour,
+	}, logger)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sleepCalls := 0
+	sleepDelays := make([]time.Duration, 0, 2)
+	stream.sleep = func(_ context.Context, delay time.Duration) error {
+		sleepCalls++
+		sleepDelays = append(sleepDelays, delay)
+		if sleepCalls >= 2 {
+			cancel()
+			return context.Canceled
+		}
+		return nil
+	}
+
+	done := make(chan struct{})
+	go func() {
+		stream.Run(ctx)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for stream run loop to stop")
+	}
+
+	if len(sleepDelays) != 2 {
+		t.Fatalf("expected two reconnect sleeps, got %d", len(sleepDelays))
+	}
+
+	if sleepDelays[0] != time.Second || sleepDelays[1] != time.Second {
+		t.Fatalf("expected reconnect backoff to reset to 1s after successful sessions, got %v", sleepDelays)
+	}
+
+	if connectionCount < 2 {
+		t.Fatalf("expected at least two websocket connection attempts, got %d", connectionCount)
+	}
+}
+
 type stubAlertTargetLookup struct {
 	err    error
 	target *telegram.Target

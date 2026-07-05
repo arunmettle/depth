@@ -209,6 +209,7 @@ Builds the minimal reliable live market engine that can ingest, normalize, and m
 - Engine websocket shutdown now unwinds cleanly on context cancel and records a proper disconnected state, improving production lifecycle reliability
 - Goal 5 now has a reusable live-validation harness, Windows runner, and evidence artifact flow for engine health, readiness, and launch coverage signoff
 - Goal 5 validation failure artifacts have been smoke-checked so missing-engine runs still produce actionable evidence instead of opaque failure
+- Engine reconnect backoff now resets after a real successful session, improving recovery speed after intermittent disconnects without widening complexity
 
 ### To Achieve
 
