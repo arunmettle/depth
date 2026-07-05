@@ -1,0 +1,38 @@
+# Sentinel Flow
+
+Sentinel Flow is a production-first, mobile-first order-flow alert product for serious crypto perpetual traders.
+
+This repository is intentionally small:
+
+- `web/`: Next.js application for onboarding, settings, alert rules, history, and billing
+- `engine/`: real-time market ingestion and alert evaluation service
+- `docs/`: build contracts and delivery notes
+
+## Product direction
+
+Sentinel Flow v1 is a narrow, premium product:
+
+- Venue: Bybit
+- Markets: BTCUSDT, ETHUSDT
+- Timeframes: 1m, 5m, 15m
+- Alert types: Stacked Imbalance, Trapped Buyers/Sellers
+- Delivery: Telegram first, web history second
+
+## Working rules
+
+- Reliability over breadth
+- Clarity over customization
+- Fewer moving parts over speculative architecture
+- Production-ready slices over demo-only breadth
+
+## Current status
+
+The web app and engine are both now executable, and the current focus is live production validation of Telegram delivery, persisted alert history, and end-to-end reliability.
+
+## Live validation
+
+- Goal 8 validation runbook: `docs/goal-8-live-validation.md`
+- Goal 8 validation script: `node scripts/validate-goal-8.mjs`
+- The script can now optionally trigger a real validation alert first when `VALIDATION_TRIGGER_ALERT=true`
+- The harness can also poll until that alert is visible in engine status and persisted history
+- Windows helper runner: `powershell -ExecutionPolicy Bypass -File .\scripts\run-goal-8-validation.ps1 -TriggerAlert`

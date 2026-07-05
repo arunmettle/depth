@@ -1,0 +1,45 @@
+import type { AlertRecord } from "@/lib/history/schema";
+
+const sampleProof = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960" viewBox="0 0 720 960" role="img" aria-label="Sentinel Flow proof snapshot"><rect width="100%" height="100%" fill="#f4efe6"/><rect x="32" y="32" width="656" height="896" rx="28" fill="#fffaf2" stroke="#d9cdb8" stroke-width="2"/><text x="56" y="84" font-family="'Segoe UI', Arial, sans-serif" font-size="18" fill="#766956">Sentinel Flow Proof</text><text x="56" y="132" font-family="'Segoe UI', Arial, sans-serif" font-size="34" font-weight="700" fill="#1f1a14">BTCUSDT BUY 1m</text><rect x="56" y="156" width="152" height="34" rx="17" fill="#138a5b"/><text x="132" y="178" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">BUY IMBALANCE</text><text x="56" y="222" font-family="'Segoe UI', Arial, sans-serif" font-size="18" fill="#50473d">BTCUSDT 1m buy stacked imbalance confirmed across 3 candles at 300% threshold.</text></svg>`;
+
+export const mockHistoryItems: AlertRecord[] = [
+  {
+    createdAt: "2026-07-05T06:02:00Z",
+    deliveryStatus: "delivered",
+    id: "alert-1",
+    marketSymbol: "BTCUSDT",
+    message:
+      "BTCUSDT 1m buy stacked imbalance confirmed across 3 candles at 300% threshold.",
+    proof: {
+      content: sampleProof,
+      contentHash: "proof-btc-1",
+      height: 960,
+      mediaType: "image/svg+xml",
+      width: 720,
+    },
+    ruleName: "BTC 1m stacked imbalance",
+    side: "buy",
+    timeframe: "1m",
+  },
+  {
+    createdAt: "2026-07-05T06:15:00Z",
+    deliveryStatus: "queued",
+    id: "alert-2",
+    marketSymbol: "ETHUSDT",
+    message:
+      "ETHUSDT 5m sell stacked imbalance confirmed across 3 candles at 300% threshold.",
+    proof: {
+      content: sampleProof.replace("BTCUSDT BUY 1m", "ETHUSDT SELL 5m").replace(
+        "#138a5b",
+        "#b64242"
+      ),
+      contentHash: "proof-eth-1",
+      height: 960,
+      mediaType: "image/svg+xml",
+      width: 720,
+    },
+    ruleName: "ETH 5m stacked imbalance",
+    side: "sell",
+    timeframe: "5m",
+  },
+];
