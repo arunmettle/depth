@@ -376,6 +376,8 @@ Converts delivered trader value into recurring revenue with clear plan control, 
 - Scout-tier access now enforces a hard two-active-rule limit while higher tiers remain uncapped
 - Alerts and billing surfaces now explain the live rule gate in the rendered UI, reducing monetization confusion at launch
 - Goal 9 validation now includes focused webhook tests, entitlement tests, active-rule gating tests, and a live browser UI smoke pass
+- Goal 9 now has a reusable live-validation harness, Windows runner, and evidence artifact flow for Stripe config, launch price IDs, billing route, and Supabase billing-state checks
+- Goal 9 validation failure artifacts have been smoke-checked so missing Stripe setup still produces actionable billing signoff evidence
 
 ### To Achieve
 
