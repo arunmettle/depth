@@ -246,6 +246,8 @@ Turns raw market data into the first monetizable product behavior: trustworthy a
 - Rule evaluation reads from concurrency-safe rule snapshots during live sync updates
 - Engine runtime tracks rule source, last sync time, and sync errors in status responses
 - Engine readiness reflects persisted-rule sync health when Supabase-backed rules are configured
+- Goal 6 now has a reusable live-validation harness, Windows runner, and evidence artifact flow for Supabase-backed rule sync proof
+- Goal 6 validation failure artifacts have been smoke-checked so missing-engine or missing-Supabase runs still produce actionable sync evidence
 
 ### To Achieve
 

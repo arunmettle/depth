@@ -21,6 +21,7 @@ This folder contains the Sentinel Flow market engine.
 
 The engine now has a real Go module and a minimal runnable HTTP service.
 Goal 5 now also has a repeatable live validation harness for engine health, readiness, stream freshness, and launch symbol/timeframe coverage.
+Goal 6 now also has a repeatable live validation harness for Supabase-backed rule sync fidelity and evaluator readiness.
 
 ## Local setup
 
@@ -66,5 +67,6 @@ When Supabase rule loading is configured, `/readyz` now stays unready until the 
 ### Next engine steps
 
 - run live Goal 5 signoff against a real engine deployment with `node ../scripts/validate-goal-5.mjs`
+- run live Goal 6 persisted-rule sync signoff with `node ../scripts/validate-goal-6.mjs`
 - live-validate Supabase-backed saved rule syncing
 - live-validate persisted alert history and Telegram delivery together
