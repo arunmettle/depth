@@ -284,6 +284,8 @@ Adds visual proof to every alert so traders can trust the signal faster, which d
 - Web history can optionally consume live engine `recentAlerts` and fall back safely to mock data
 - Web history includes a per-alert proof detail route backed by the shared history source
 - Proof metadata now persists into real alert history records for later review
+- Goal 7 now has a reusable live-validation harness, Windows runner, and evidence artifact flow for proof artifact contract signoff
+- Goal 7 validation failure artifacts have been smoke-checked so missing-engine runs still produce actionable proof-contract evidence
 
 ### To Achieve
 

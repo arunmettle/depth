@@ -37,6 +37,9 @@ The web app and engine are both now executable, and the current focus is live pr
 - Goal 6 persisted-rule validation runbook: `docs/goal-6-live-validation.md`
 - Goal 6 persisted-rule validation script: `node scripts/validate-goal-6.mjs`
 - Windows helper runner: `powershell -ExecutionPolicy Bypass -File .\scripts\run-goal-6-validation.ps1`
+- Goal 7 proof-contract validation runbook: `docs/goal-7-live-validation.md`
+- Goal 7 proof-contract validation script: `node scripts/validate-goal-7.mjs`
+- Windows helper runner: `powershell -ExecutionPolicy Bypass -File .\scripts\run-goal-7-validation.ps1`
 - Goal 8 validation runbook: `docs/goal-8-live-validation.md`
 - Goal 8 validation script: `node scripts/validate-goal-8.mjs`
 - The script can now optionally trigger a real validation alert first when `VALIDATION_TRIGGER_ALERT=true`
