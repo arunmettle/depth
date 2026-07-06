@@ -63,6 +63,18 @@ The helper will:
 - refresh stable latest JSON and markdown copies in the same directory
 - reuse the existing Node launch-audit harness
 
+To summarize the latest Goal 5 to Goal 10 artifacts without rerunning the validations:
+
+```bash
+node scripts/summarize-launch-evidence.mjs
+```
+
+Optional summary output artifact:
+
+```bash
+VALIDATION_REPORT_PATH=artifacts/launch-evidence-summary.json node scripts/summarize-launch-evidence.mjs
+```
+
 ## Expected launch-audit flow
 
 1. Start the web app
