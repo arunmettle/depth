@@ -45,3 +45,15 @@ export const navigationTitleByPath = primaryNavigation.reduce<
   titles[item.href] = item.label;
   return titles;
 }, {});
+
+export function getNavigationTitle(pathname: string) {
+  if (navigationTitleByPath[pathname]) {
+    return navigationTitleByPath[pathname];
+  }
+
+  const nestedMatch = primaryNavigation.find(
+    (item) => pathname === item.href || pathname.startsWith(`${item.href}/`)
+  );
+
+  return nestedMatch?.label ?? "Overview";
+}

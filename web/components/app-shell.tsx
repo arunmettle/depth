@@ -17,7 +17,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { navigationTitleByPath, primaryNavigation } from "@/lib/navigation";
+import { getNavigationTitle, primaryNavigation } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 import type { AuthState } from "@/lib/supabase/server";
 
@@ -73,7 +73,7 @@ function NavLinks({ onSelect }: { onSelect?: () => void }) {
 
 export function AppShell({ auth, children }: AppShellProps) {
   const pathname = usePathname();
-  const title = navigationTitleByPath[pathname] ?? "Overview";
+  const title = getNavigationTitle(pathname);
 
   return (
     <div className="flex min-h-screen bg-muted/30">
