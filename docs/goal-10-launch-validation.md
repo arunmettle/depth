@@ -1,0 +1,77 @@
+# Goal 10 Launch Validation
+
+This document defines the unified launch audit for Sentinel Flow before a public Founding Access release.
+
+## What this validation proves
+
+- The web app still passes its core test and production build gates
+- Core launch routes respond successfully from the configured site URL
+- Existing live-service validation harnesses for Goals 5, 6, 7, and 8 can be executed from one launch audit
+- Goal 10 produces one reusable JSON and markdown artifact for release signoff
+
+## Required environment
+
+Set these variables before running the launch audit:
+
+```bash
+VALIDATION_SITE_URL=http://127.0.0.1:3000
+VALIDATION_ROUTE_PATHS=/,/dashboard,/alerts,/history,/settings,/billing
+VALIDATION_INCLUDE_GOALS=5,6,7,8
+VALIDATION_RUN_WEB_TEST=true
+VALIDATION_RUN_WEB_BUILD=true
+VALIDATION_REPORT_PATH=artifacts/goal-10-validation.json
+```
+
+The delegated goal harnesses also rely on their own existing environment:
+
+- Goal 5: `ENGINE_STATUS_URL`
+- Goal 6: Supabase-backed rule validation inputs when using the live path
+- Goal 7: engine proof-render validation inputs
+- Goal 8: `ENGINE_STATUS_URL`, Supabase credentials, Telegram credentials, and optional trigger variables
+
+Notes:
+
+- `VALIDATION_ROUTE_PATHS` can be reduced or expanded, but the default set covers the core launch surfaces.
+- `VALIDATION_INCLUDE_GOALS` controls which existing live-service harnesses are delegated from Goal 10.
+- If `VALIDATION_REPORT_PATH` is set, the audit writes timestamped JSON and markdown artifacts plus stable `*-latest` copies.
+
+## Run the launch audit
+
+From the repository root:
+
+```bash
+node scripts/validate-goal-10.mjs
+```
+
+On Windows, you can also use the helper runner:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run-goal-10-validation.ps1
+```
+
+The helper will:
+
+- stamp a timestamped JSON report path under `artifacts/`
+- write a sibling markdown summary next to that JSON artifact
+- refresh stable latest JSON and markdown copies in the same directory
+- reuse the existing Node launch-audit harness
+
+## Expected launch-audit flow
+
+1. Start the web app
+2. Run `pnpm test` from `web/`
+3. Run `pnpm build` from `web/`
+4. Fetch and check the configured launch routes
+5. Delegate into the Goal 5, 6, 7, and 8 live validation harnesses
+6. Collect one combined Goal 10 artifact that points to the delegated goal artifacts
+
+## Evidence required for Goal 10 signoff
+
+- Web test passes
+- Web build passes
+- All configured route checks return `200`
+- Delegated Goal 5 validation passes
+- Delegated Goal 6 validation passes
+- Delegated Goal 7 validation passes
+- Delegated Goal 8 validation passes
+- Goal 10 JSON and markdown artifacts are preserved for launch review

@@ -407,6 +407,9 @@ Confirms the MVP is genuinely safe for real users, credible to market publicly, 
 - The dashboard now includes a shared launch-readiness checklist that combines auth, Telegram, billing, rules, and engine signals into one operator-facing Goal 10 proof surface
 - Launch readiness logic now lives in a focused helper with direct tests for complete and incomplete public-release states
 - Goal 10 UI validation now includes real browser checks of the dashboard readiness surface on desktop and mobile viewports without console errors
+- Goal 10 now has a unified launch-audit harness that can run web tests, production build checks, route smoke checks, and delegated Goal 5 to Goal 8 validations from one command
+- A Windows-friendly Goal 10 runner now stamps JSON and markdown launch-audit artifacts, including stable latest-copy evidence files
+- Goal 10 artifact generation has been smoke-checked locally with successful route, test, and build evidence output against the running web app
 
 ### To Achieve
 
