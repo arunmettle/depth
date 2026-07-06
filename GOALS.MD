@@ -412,6 +412,7 @@ Confirms the MVP is genuinely safe for real users, credible to market publicly, 
 - Goal 10 now has a unified launch-audit harness that can run web tests, production build checks, route smoke checks, and delegated Goal 5 to Goal 9 validations from one command
 - A Windows-friendly Goal 10 runner now stamps JSON and markdown launch-audit artifacts, including stable latest-copy evidence files
 - Goal 10 artifact generation has been smoke-checked locally with successful route, test, and build evidence output against the running web app
+- Goal 10 launch audit now includes a per-goal environment preflight so missing live-service setup is visible before delegated validation failures
 
 ### To Achieve
 

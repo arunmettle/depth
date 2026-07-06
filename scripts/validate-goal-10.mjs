@@ -24,6 +24,32 @@ const VALIDATION_RUN_WEB_TEST = getEnvBoolean("VALIDATION_RUN_WEB_TEST", true);
 const VALIDATION_RUN_WEB_BUILD = getEnvBoolean("VALIDATION_RUN_WEB_BUILD", true);
 const VALIDATION_REPORT_PATH = getEnv("VALIDATION_REPORT_PATH");
 
+const goalEnvironmentRequirements = {
+  "5": [
+    ["ENGINE_STATUS_URL"],
+  ],
+  "6": [
+    ["ENGINE_STATUS_URL"],
+    ["SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"],
+    ["SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY"],
+  ],
+  "7": [
+    ["ENGINE_STATUS_URL"],
+  ],
+  "8": [
+    ["ENGINE_STATUS_URL"],
+    ["SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"],
+    ["SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY"],
+    ["TELEGRAM_BOT_TOKEN"],
+  ],
+  "9": [
+    ["STRIPE_SECRET_KEY"],
+    ["STRIPE_SCOUT_PRICE_ID"],
+    ["STRIPE_FOUNDING_ACCESS_PRICE_ID"],
+    ["STRIPE_SENTINEL_PRO_PRICE_ID"],
+  ],
+};
+
 const failures = [];
 const warnings = [];
 
@@ -39,6 +65,7 @@ async function main() {
 }
 
 async function buildSummary() {
+  const environmentPreflight = buildEnvironmentPreflight();
   const web = {
     build: VALIDATION_RUN_WEB_BUILD
       ? await runCommandValidation({
@@ -68,9 +95,10 @@ async function buildSummary() {
   return {
     completedAt: new Date().toISOString(),
     delegatedGoals,
+    environmentPreflight,
     failures: [...failures],
     overallStatus: failures.length ? "failed" : "passed",
-    recommendations: buildRecommendations(web, delegatedGoals),
+    recommendations: buildRecommendations(environmentPreflight, web, delegatedGoals),
     runConfig: buildRunConfig(),
     warnings: [...warnings],
     web,
@@ -88,8 +116,14 @@ function buildRunConfig() {
   };
 }
 
-function buildRecommendations(web, delegatedGoals) {
+function buildRecommendations(environmentPreflight, web, delegatedGoals) {
   const items = [];
+
+  if (environmentPreflight.some((item) => !item.ready)) {
+    items.push(
+      "Fill the missing Goal 10 preflight environment variables before running the full live-service launch audit."
+    );
+  }
 
   if (web.routes.some((route) => route.status !== 200)) {
     items.push("Fix the failing web route checks before treating Goal 10 as launch-ready.");
@@ -118,6 +152,21 @@ function buildRecommendations(web, delegatedGoals) {
   }
 
   return items;
+}
+
+function buildEnvironmentPreflight() {
+  return VALIDATION_INCLUDE_GOALS.map((goalId) => {
+    const requirementGroups = goalEnvironmentRequirements[goalId] ?? [];
+    const missingGroups = requirementGroups
+      .filter((group) => !group.some((envKey) => getEnv(envKey)))
+      .map((group) => group.join(" or "));
+
+    return {
+      goalId,
+      missing: missingGroups,
+      ready: missingGroups.length === 0,
+    };
+  });
 }
 
 async function validateRoutes() {
@@ -355,6 +404,10 @@ function buildMarkdownReport(summary) {
     `- Run web build: ${formatValue(summary.runConfig?.runWebBuild)}`,
     `- Report path: ${formatValue(summary.runConfig?.reportPath)}`,
     "",
+    "## Environment Preflight",
+    "",
+    ...formatPreflight(summary.environmentPreflight),
+    "",
     "## Web",
     "",
     `- Web test status: ${formatValue(summary.web?.test?.status)}`,
@@ -397,6 +450,17 @@ function formatList(items) {
   }
 
   return items.map((item) => `- ${item}`);
+}
+
+function formatPreflight(items) {
+  if (!items?.length) {
+    return ["- No delegated goal preflight checks configured"];
+  }
+
+  return items.map((item) => {
+    const suffix = item.ready ? "ready" : `missing ${item.missing.join("; ")}`;
+    return `- Goal ${item.goalId}: ${suffix}`;
+  });
 }
 
 function formatValue(value) {

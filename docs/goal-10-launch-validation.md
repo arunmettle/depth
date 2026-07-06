@@ -7,6 +7,7 @@ This document defines the unified launch audit for Sentinel Flow before a public
 - The web app still passes its core test and production build gates
 - Core launch routes respond successfully from the configured site URL
 - Existing live-service validation harnesses for Goals 5, 6, 7, 8, and 9 can be executed from one launch audit
+- Goal 10 surfaces a per-goal environment preflight so missing live-service setup is visible before delegated signoff runs fail
 - Goal 10 produces one reusable JSON and markdown artifact for release signoff
 
 ## Required environment
@@ -29,6 +30,8 @@ The delegated goal harnesses also rely on their own existing environment:
 - Goal 7: engine proof-render validation inputs
 - Goal 8: `ENGINE_STATUS_URL`, Supabase credentials, Telegram credentials, and optional trigger variables
 - Goal 9: Stripe secret key, launch price IDs, and optional Supabase billing-state inputs
+
+The launch audit now reports a per-goal environment preflight section before delegated results so missing setup is visible immediately.
 
 Notes:
 
@@ -63,8 +66,9 @@ The helper will:
 2. Run `pnpm test` from `web/`
 3. Run `pnpm build` from `web/`
 4. Fetch and check the configured launch routes
-5. Delegate into the Goal 5, 6, 7, 8, and 9 live validation harnesses
-6. Collect one combined Goal 10 artifact that points to the delegated goal artifacts
+5. Report the per-goal environment preflight for Goals 5 to 9
+6. Delegate into the Goal 5, 6, 7, 8, and 9 live validation harnesses
+7. Collect one combined Goal 10 artifact that points to the delegated goal artifacts
 
 ## Evidence required for Goal 10 signoff
 
