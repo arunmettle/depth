@@ -11,6 +11,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import Link from "next/link";
+import { describeActiveRuleLimit } from "@/lib/billing/plans";
+import { getBillingAccountForCurrentUser } from "@/lib/billing/subscriptions";
 import { cn } from "@/lib/utils";
 
 const alertRuleTypes = [
@@ -33,6 +35,7 @@ export default async function AlertsPage({
 }) {
   const params = await searchParams;
   const rules = await getAlertRulesForCurrentUser();
+  const billingAccount = await getBillingAccountForCurrentUser();
   const selectedRule = params.edit
     ? await getAlertRuleForCurrentUser(params.edit)
     : null;
@@ -70,6 +73,14 @@ export default async function AlertsPage({
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+            {billingAccount?.plan
+              ? `${billingAccount.plan.name}: ${describeActiveRuleLimit(
+                  billingAccount.plan.activeRuleLimit,
+                  billingAccount.status
+                )}`
+              : "Billing is required before live alert rules can be activated. You can still prepare drafts by saving them as paused."}
+          </div>
           <AlertRuleForm
             key={selectedRule?.id ?? "new-rule"}
             selectedRule={selectedRule}

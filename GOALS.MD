@@ -365,17 +365,23 @@ Converts delivered trader value into recurring revenue with clear plan control, 
 
 ### Achieved
 
-- Billing route shell exists
+- Billing route now exposes launch pricing cards, current account state, and clear launch guardrails
 - Pricing direction is defined in the PRD
-- Monetization ladder is conceptually clear: Scout, Sentinel Pro, Alpha Stream
+- Monetization ladder is conceptually clear: Scout, Founding Access, Sentinel Pro, Alpha Stream
+- Stripe Billing configuration now supports launch checkout plans, optional launch trials, and customer-portal management
+- Server actions now redirect authenticated users into Stripe Checkout and back into the Stripe customer portal
+- Stripe webhook intake now verifies signatures and syncs subscription state into Supabase-backed billing snapshots
+- `billing_accounts` persistence now tracks Stripe customer mapping, plan state, renewal timing, and cancellation-at-period-end
+- Alert activation is now gated by paid subscription state, so inactive accounts cannot turn live rules on
+- Scout-tier access now enforces a hard two-active-rule limit while higher tiers remain uncapped
+- Alerts and billing surfaces now explain the live rule gate in the rendered UI, reducing monetization confusion at launch
+- Goal 9 validation now includes focused webhook tests, entitlement tests, active-rule gating tests, and a live browser UI smoke pass
 
 ### To Achieve
 
-- Add billing provider integration
-- Add trial and subscription state handling
-- Add gated product behavior
-- Add account and billing management flows
 - Validate upgrade, downgrade, renewal, and failed-payment paths
+- Run live Stripe checkout, webhook, and portal validation against a real account
+- Decide whether Alpha Stream stays sales-led or becomes self-serve in the first public release
 
 ### Validation
 
@@ -385,7 +391,7 @@ Converts delivered trader value into recurring revenue with clear plan control, 
 
 ### Status
 
-`Pending`
+`In Progress`
 
 ## Goal 10: Production Readiness and Founding Access Launch
 

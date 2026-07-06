@@ -86,6 +86,8 @@ function createMutationChain(resultError: unknown = null) {
 }
 
 function buildSupabaseStub(args?: {
+  activeRuleIds?: string[];
+  billingData?: unknown;
   deleteError?: unknown;
   getUserId?: string | null;
   insertError?: unknown;
@@ -107,43 +109,67 @@ function buildSupabaseStub(args?: {
   const insert = vi.fn().mockResolvedValue({ error: args?.insertError ?? null });
 
   const from = vi.fn((table: string) => {
-    if (table !== "alert_rules") {
-      throw new Error(`Unexpected table ${table}`);
+    if (table === "billing_accounts") {
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: args?.billingData ?? null,
+              error: null,
+            }),
+          })),
+        })),
+      };
     }
 
-    return {
-      delete: deleteChain.deleteFn,
-      insert,
-      select: vi.fn((query?: string) => {
-        if (query?.includes("created_at")) {
-          return {
-            eq: vi.fn((field: string) => {
-              if (field === "user_id" && args?.singleData !== undefined) {
+    if (table === "alert_rules") {
+      return {
+        delete: deleteChain.deleteFn,
+        insert,
+        select: vi.fn((query?: string) => {
+          if (query === "id") {
+            return {
+              eq: vi.fn(() => ({
+                eq: vi.fn().mockResolvedValue({
+                  data: (args?.activeRuleIds ?? []).map((id) => ({ id })),
+                  error: null,
+                }),
+              })),
+            };
+          }
+
+          if (query?.includes("created_at")) {
+            return {
+              eq: vi.fn((field: string) => {
+                if (field === "user_id" && args?.singleData !== undefined) {
+                  return {
+                    eq: singleChain.eqSecond,
+                    maybeSingle: singleChain.maybeSingle,
+                  };
+                }
+
                 return {
                   eq: singleChain.eqSecond,
                   maybeSingle: singleChain.maybeSingle,
+                  order: selectChain.order,
                 };
-              }
+              }),
+              order: selectChain.order,
+              maybeSingle: singleChain.maybeSingle,
+            };
+          }
 
-              return {
-                eq: singleChain.eqSecond,
-                maybeSingle: singleChain.maybeSingle,
-                order: selectChain.order,
-              };
-            }),
-            order: selectChain.order,
+          return {
+            eq: singleChain.eqFirst,
             maybeSingle: singleChain.maybeSingle,
+            order: selectChain.order,
           };
-        }
+        }),
+        update: updateChain.update,
+      };
+    }
 
-        return {
-          eq: singleChain.eqFirst,
-          maybeSingle: singleChain.maybeSingle,
-          order: selectChain.order,
-        };
-      }),
-      update: updateChain.update,
-    };
+    throw new Error(`Unexpected table ${table}`);
   });
 
   return {
@@ -279,8 +305,83 @@ describe("alert rules persistence", () => {
     ).rejects.toThrow("You must be signed in");
   });
 
-  it("inserts a new current-user rule with created and updated timestamps", async () => {
+  it("blocks activating a rule when no paid billing plan is live", async () => {
     const supabase = buildSupabaseStub();
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    await expect(
+      upsertAlertRuleForCurrentUser({
+        marketSymbol: "BTCUSDT",
+        name: "Rule",
+        params: {
+          confirmationRows: 3,
+          thresholdMultiplier: 300,
+        },
+        ruleType: "stacked_imbalance",
+        status: "active",
+        timeframe: "5m",
+      })
+    ).rejects.toThrow("Start a paid plan on Billing before activating live alert rules.");
+  });
+
+  it("blocks a third active rule on the Scout plan", async () => {
+    const supabase = buildSupabaseStub({
+      activeRuleIds: ["rule-1", "rule-2"],
+      billingData: {
+        plan_key: "scout",
+        subscription_status: "active",
+      },
+    });
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    await expect(
+      upsertAlertRuleForCurrentUser({
+        marketSymbol: "BTCUSDT",
+        name: "Rule",
+        params: {
+          confirmationRows: 3,
+          thresholdMultiplier: 300,
+        },
+        ruleType: "stacked_imbalance",
+        status: "active",
+        timeframe: "5m",
+      })
+    ).rejects.toThrow("supports 2 active alert rules");
+  });
+
+  it("allows updating an already-active Scout rule without counting it twice", async () => {
+    const supabase = buildSupabaseStub({
+      activeRuleIds: ["rule-123", "rule-2"],
+      billingData: {
+        plan_key: "scout",
+        subscription_status: "active",
+      },
+    });
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    await expect(
+      upsertAlertRuleForCurrentUser({
+        id: "rule-123",
+        marketSymbol: "BTCUSDT",
+        name: "Rule",
+        params: {
+          confirmationRows: 3,
+          thresholdMultiplier: 300,
+        },
+        ruleType: "stacked_imbalance",
+        status: "active",
+        timeframe: "5m",
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  it("inserts a new current-user rule with created and updated timestamps", async () => {
+    const supabase = buildSupabaseStub({
+      billingData: {
+        plan_key: "sentinel_pro",
+        subscription_status: "active",
+      },
+    });
     vi.mocked(createClient).mockResolvedValue(supabase as never);
 
     await upsertAlertRuleForCurrentUser({
@@ -314,7 +415,13 @@ describe("alert rules persistence", () => {
   });
 
   it("updates a rule using both rule id and current user id filters", async () => {
-    const supabase = buildSupabaseStub();
+    const supabase = buildSupabaseStub({
+      activeRuleIds: ["rule-123"],
+      billingData: {
+        plan_key: "sentinel_pro",
+        subscription_status: "active",
+      },
+    });
     vi.mocked(createClient).mockResolvedValue(supabase as never);
 
     await upsertAlertRuleForCurrentUser({

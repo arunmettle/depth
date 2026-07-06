@@ -13,6 +13,7 @@ import {
   supportedStatuses,
   supportedTimeframes,
 } from "@/lib/alerts/schema";
+import { getActiveRuleLimitForSubscription } from "@/lib/billing/plans";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -35,6 +36,20 @@ type AlertRuleRow = {
   timeframe: SupportedTimeframe;
   updated_at: string;
   user_id: string;
+};
+
+type BillingAccountAccessRow = {
+  plan_key: "scout" | "founding_access" | "sentinel_pro" | "alpha_stream" | null;
+  subscription_status:
+    | "active"
+    | "canceled"
+    | "incomplete"
+    | "incomplete_expired"
+    | "inactive"
+    | "past_due"
+    | "paused"
+    | "trialing"
+    | "unpaid";
 };
 
 function mapAlertRule(row: AlertRuleRow): AlertRule {
@@ -134,6 +149,52 @@ export async function upsertAlertRuleForCurrentUser(input: {
 
   if (!user) {
     throw new Error("You must be signed in to save an alert rule.");
+  }
+
+  const { data: billingAccount } = await supabase
+    .from("billing_accounts")
+    .select("plan_key,subscription_status")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const activeRuleLimit = getActiveRuleLimitForSubscription({
+    planKey: (billingAccount as BillingAccountAccessRow | null)?.plan_key ?? null,
+    status:
+      (billingAccount as BillingAccountAccessRow | null)?.subscription_status ??
+      "inactive",
+  });
+
+  if (input.status === "active") {
+    const { data: activeRules, error: activeRulesError } = await supabase
+      .from("alert_rules")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("status", "active");
+
+    if (activeRulesError) {
+      throw activeRulesError;
+    }
+
+    const activeRuleCount = activeRules?.length ?? 0;
+    const isExistingActiveRule = Boolean(
+      input.id && activeRules?.some((rule) => rule.id === input.id)
+    );
+
+    if (activeRuleLimit === 0) {
+      throw new Error(
+        "Start a paid plan on Billing before activating live alert rules."
+      );
+    }
+
+    if (
+      activeRuleLimit !== null &&
+      !isExistingActiveRule &&
+      activeRuleCount >= activeRuleLimit
+    ) {
+      throw new Error(
+        `Your current plan supports ${activeRuleLimit} active alert rules. Pause one or upgrade on Billing to activate another.`
+      );
+    }
   }
 
   const timestamp = new Date().toISOString();
