@@ -18,7 +18,7 @@ const VALIDATION_ROUTE_PATHS = getEnvCSV("VALIDATION_ROUTE_PATHS", [
 ]);
 const VALIDATION_INCLUDE_GOALS = getEnvCSVOrEmpty(
   "VALIDATION_INCLUDE_GOALS",
-  ["5", "6", "7", "8"]
+  ["5", "6", "7", "8", "9"]
 );
 const VALIDATION_RUN_WEB_TEST = getEnvBoolean("VALIDATION_RUN_WEB_TEST", true);
 const VALIDATION_RUN_WEB_BUILD = getEnvBoolean("VALIDATION_RUN_WEB_BUILD", true);

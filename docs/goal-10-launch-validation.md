@@ -6,7 +6,7 @@ This document defines the unified launch audit for Sentinel Flow before a public
 
 - The web app still passes its core test and production build gates
 - Core launch routes respond successfully from the configured site URL
-- Existing live-service validation harnesses for Goals 5, 6, 7, and 8 can be executed from one launch audit
+- Existing live-service validation harnesses for Goals 5, 6, 7, 8, and 9 can be executed from one launch audit
 - Goal 10 produces one reusable JSON and markdown artifact for release signoff
 
 ## Required environment
@@ -16,7 +16,7 @@ Set these variables before running the launch audit:
 ```bash
 VALIDATION_SITE_URL=http://127.0.0.1:3000
 VALIDATION_ROUTE_PATHS=/,/dashboard,/alerts,/history,/settings,/billing
-VALIDATION_INCLUDE_GOALS=5,6,7,8
+VALIDATION_INCLUDE_GOALS=5,6,7,8,9
 VALIDATION_RUN_WEB_TEST=true
 VALIDATION_RUN_WEB_BUILD=true
 VALIDATION_REPORT_PATH=artifacts/goal-10-validation.json
@@ -28,6 +28,7 @@ The delegated goal harnesses also rely on their own existing environment:
 - Goal 6: Supabase-backed rule validation inputs when using the live path
 - Goal 7: engine proof-render validation inputs
 - Goal 8: `ENGINE_STATUS_URL`, Supabase credentials, Telegram credentials, and optional trigger variables
+- Goal 9: Stripe secret key, launch price IDs, and optional Supabase billing-state inputs
 
 Notes:
 
@@ -62,7 +63,7 @@ The helper will:
 2. Run `pnpm test` from `web/`
 3. Run `pnpm build` from `web/`
 4. Fetch and check the configured launch routes
-5. Delegate into the Goal 5, 6, 7, and 8 live validation harnesses
+5. Delegate into the Goal 5, 6, 7, 8, and 9 live validation harnesses
 6. Collect one combined Goal 10 artifact that points to the delegated goal artifacts
 
 ## Evidence required for Goal 10 signoff
@@ -74,4 +75,5 @@ The helper will:
 - Delegated Goal 6 validation passes
 - Delegated Goal 7 validation passes
 - Delegated Goal 8 validation passes
+- Delegated Goal 9 validation passes
 - Goal 10 JSON and markdown artifacts are preserved for launch review
