@@ -62,6 +62,24 @@ The helper will:
 - write a sibling markdown summary next to that JSON artifact
 - refresh stable latest JSON and markdown copies in the same directory
 - reuse the existing Node launch-audit harness
+- leave existing delegated-goal latest artifacts untouched unless those delegated validations are actually run
+
+For a chained operator flow that runs the launch audit and then refreshes the latest evidence summary:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run-launch-signoff.ps1
+```
+
+Optional switches:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run-launch-signoff.ps1 -SkipWebChecks
+powershell -ExecutionPolicy Bypass -File .\scripts\run-launch-signoff.ps1 -SkipDelegatedGoals
+```
+
+Note:
+
+- The evidence summary reflects the latest Goal 5 to Goal 10 artifacts already on disk. If you skip delegated goals, the summary still surfaces the most recent live-service evidence for those goals rather than pretending they passed in the current run.
 
 To summarize the latest Goal 5 to Goal 10 artifacts without rerunning the validations:
 

@@ -176,7 +176,7 @@ function getEnvCSVOrEmpty(key, fallback) {
   }
 
   const normalized = value.trim();
-  if (!normalized) {
+  if (!normalized || normalized === "__none__") {
     return [];
   }
 

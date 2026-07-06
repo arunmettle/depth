@@ -415,6 +415,8 @@ Confirms the MVP is genuinely safe for real users, credible to market publicly, 
 - Goal 10 launch audit now includes a per-goal environment preflight so missing live-service setup is visible before delegated validation failures
 - Live validation docs now share one reusable environment template so multi-goal signoff setup is easier to stage consistently
 - Latest Goal 5 to Goal 10 validation artifacts can now be summarized through one launch-evidence view, reducing manual signoff review overhead
+- Goal 10 now also has a chained operator runner that executes the launch audit and refreshes the latest evidence summary in one flow
+- The chained signoff flow has been smoke-checked locally, including the delegated-goal skip path, while preserving the latest cross-goal evidence view
 
 ### To Achieve
 
