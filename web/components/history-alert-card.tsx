@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import {
   getDeliveryLabel,
+  getProofImageSrc,
   getSideLabel,
   summarizeProof,
 } from "@/lib/history/presentation";
@@ -22,6 +23,8 @@ type HistoryAlertCardProps = {
 };
 
 export function HistoryAlertCard({ item }: HistoryAlertCardProps) {
+  const proofImageSrc = getProofImageSrc(item.proof);
+
   return (
     <Card className="overflow-hidden">
       <CardHeader className="gap-3">
@@ -37,10 +40,21 @@ export function HistoryAlertCard({ item }: HistoryAlertCardProps) {
       </CardHeader>
       <CardContent className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
         <div className="rounded-2xl border border-border bg-[#f7f1e6] p-3">
-          <div
-            className="mx-auto aspect-[3/4] w-full max-w-[320px] overflow-hidden rounded-xl bg-[#f4efe6]"
-            dangerouslySetInnerHTML={{ __html: item.proof.content }}
-          />
+          <div className="mx-auto aspect-[3/4] w-full max-w-[320px] overflow-hidden rounded-xl bg-[#f4efe6]">
+            {proofImageSrc ? (
+              <img
+                alt={`${summarizeProof(item)} proof snapshot`}
+                className="h-full w-full object-contain"
+                height={item.proof.height}
+                src={proofImageSrc}
+                width={item.proof.width}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
+                Proof preview unavailable for this artifact type.
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex flex-col gap-4">
           <div className="rounded-xl border border-border bg-background p-4">
