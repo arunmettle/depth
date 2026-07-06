@@ -34,6 +34,7 @@ The delegated goal harnesses also rely on their own existing environment:
 The launch audit now reports a per-goal environment preflight section before delegated results so missing setup is visible immediately.
 
 For a shared starting point, use [validation.env.example](/C:/Dev/Depth/docs/validation.env.example).
+For the operator-facing go/no-go runbook, use [founding-access-launch-checklist.md](/C:/Dev/Depth/docs/founding-access-launch-checklist.md).
 
 Notes:
 
