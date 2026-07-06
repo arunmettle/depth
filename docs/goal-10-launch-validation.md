@@ -51,6 +51,20 @@ From the repository root:
 node scripts/validate-goal-10.mjs
 ```
 
+Cross-platform chained signoff runner:
+
+```bash
+node scripts/run-launch-signoff.mjs
+```
+
+Optional flags:
+
+```bash
+node scripts/run-launch-signoff.mjs --skip-web-checks
+node scripts/run-launch-signoff.mjs --skip-delegated-goals
+node scripts/run-launch-signoff.mjs --report-dir artifacts
+```
+
 On Windows, you can also use the helper runner:
 
 ```powershell

@@ -418,6 +418,7 @@ Confirms the MVP is genuinely safe for real users, credible to market publicly, 
 - Goal 10 now also has a chained operator runner that executes the launch audit and refreshes the latest evidence summary in one flow
 - The chained signoff flow has been smoke-checked locally, including the delegated-goal skip path, while preserving the latest cross-goal evidence view
 - Founding Access now has a concrete launch checklist that ties environment prep, live validation, evidence review, and go/no-go rules into one operator runbook
+- Goal 10 signoff now also has a cross-platform Node entrypoint, reducing reliance on PowerShell during launch operations
 
 ### To Achieve
 
