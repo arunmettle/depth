@@ -404,6 +404,9 @@ Confirms the MVP is genuinely safe for real users, credible to market publicly, 
 - Validation strategy is defined
 - Launch and monetization framework is defined
 - Multiple product slices have already been checked with lint, tests, and builds
+- The dashboard now includes a shared launch-readiness checklist that combines auth, Telegram, billing, rules, and engine signals into one operator-facing Goal 10 proof surface
+- Launch readiness logic now lives in a focused helper with direct tests for complete and incomplete public-release states
+- Goal 10 UI validation now includes real browser checks of the dashboard readiness surface on desktop and mobile viewports without console errors
 
 ### To Achieve
 
@@ -425,7 +428,7 @@ Confirms the MVP is genuinely safe for real users, credible to market publicly, 
 
 ### Status
 
-`Pending`
+`In Progress`
 
 ## Current State Summary
 

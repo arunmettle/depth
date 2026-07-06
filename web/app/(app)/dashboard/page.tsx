@@ -9,8 +9,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { describeAlertRule } from "@/lib/alerts/presentation";
 import { getAlertRulesForCurrentUser } from "@/lib/alerts/rules";
+import { getBillingAccountForCurrentUser } from "@/lib/billing/subscriptions";
 import { buttonVariants } from "@/components/ui/button";
 import { getEngineRuntimeSummary } from "@/lib/engine-status/source";
+import { getLaunchReadiness } from "@/lib/launch-readiness";
 import {
   Card,
   CardAction,
@@ -21,6 +23,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getAuthState } from "@/lib/supabase/server";
+import {
+  canPersistTelegramConnection,
+  getTelegramConnectionForCurrentUser,
+} from "@/lib/telegram/connections";
+import { getTelegramConfig } from "@/lib/telegram/config";
+import { getTelegramPairingReadiness } from "@/lib/telegram/readiness";
 import { cn } from "@/lib/utils";
 
 const signalCards = [
@@ -46,6 +54,23 @@ export default async function DashboardPage() {
   const auth = await getAuthState();
   const engine = await getEngineRuntimeSummary();
   const rules = await getAlertRulesForCurrentUser();
+  const billingAccount = await getBillingAccountForCurrentUser();
+  const telegramConnection = auth.isAuthenticated
+    ? await getTelegramConnectionForCurrentUser()
+    : null;
+  const telegramReadiness = getTelegramPairingReadiness({
+    auth,
+    canPersistConnection: canPersistTelegramConnection(),
+    config: getTelegramConfig(),
+  });
+  const launchReadiness = getLaunchReadiness({
+    auth,
+    billingAccount,
+    engine,
+    rules,
+    telegramConnection,
+    telegramReadiness,
+  });
   const activeRuleCount = rules.filter((rule) => rule.status === "active").length;
 
   const engineBadge =
@@ -237,6 +262,58 @@ export default async function DashboardPage() {
                 No rules have been saved yet. The dashboard will show them here once they are configured.
               </p>
             ) : null}
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Launch readiness</CardTitle>
+            <CardDescription>
+              One production checklist keeps Founding Access decisions grounded in actual system state.
+            </CardDescription>
+            <CardAction>
+              <Badge variant={launchReadiness.complete ? "default" : "secondary"}>
+                {launchReadiness.complete ? "Launch-ready" : "Needs signoff"}
+              </Badge>
+            </CardAction>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {launchReadiness.items.map((item) => (
+              <div
+                key={item.label}
+                className="flex flex-col gap-2 rounded-xl border border-border bg-background px-4 py-4 sm:flex-row sm:items-start sm:justify-between"
+              >
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <p className="text-sm text-muted-foreground">{item.detail}</p>
+                </div>
+                <Badge variant={item.ready ? "outline" : "secondary"}>
+                  {item.ready ? "Ready" : "Blocked"}
+                </Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Founding Access posture</CardTitle>
+            <CardDescription>
+              Launch stays disciplined when onboarding, monetization, and reliability all point in the same direction.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
+            <p>
+              The public launch bar is intentionally higher than local build success: auth, Telegram, billing, rules, and engine visibility all need to be live together.
+            </p>
+            <p>
+              Billing gating now prevents unpaid accounts from activating live rules, which keeps early-user promises aligned with actual entitlement.
+            </p>
+            <p>
+              This dashboard checklist is the operator-friendly proof surface for Goal 10 before wider marketing or onboarding claims are made.
+            </p>
           </CardContent>
         </Card>
       </section>
