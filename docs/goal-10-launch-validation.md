@@ -108,6 +108,12 @@ Optional summary output artifact:
 VALIDATION_REPORT_PATH=artifacts/launch-evidence-summary.json node scripts/summarize-launch-evidence.mjs
 ```
 
+When `VALIDATION_REPORT_PATH` is set, the summary now writes:
+
+- a JSON summary artifact
+- a sibling markdown summary
+- stable latest JSON and markdown copies
+
 ## Expected launch-audit flow
 
 1. Start the web app

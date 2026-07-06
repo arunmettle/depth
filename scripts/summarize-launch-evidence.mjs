@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { readdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { copyFile, readdir, readFile, writeFile } from "node:fs/promises";
+import { basename, dirname, extname, join, resolve } from "node:path";
 
 const ARTIFACTS_DIR = resolve(getEnv("VALIDATION_ARTIFACTS_DIR") || "artifacts");
 const VALIDATION_GOAL_IDS = getEnvCSVOrEmpty("VALIDATION_GOAL_IDS", [
@@ -17,13 +17,23 @@ const VALIDATION_REPORT_PATH = getEnv("VALIDATION_REPORT_PATH");
 async function main() {
   const summary = await buildSummary();
   const output = JSON.stringify(summary, null, 2);
+  const markdown = buildMarkdownSummary(summary);
 
   console.log(output);
 
   if (VALIDATION_REPORT_PATH) {
     await writeFile(VALIDATION_REPORT_PATH, `${output}\n`, "utf8");
+    const markdownPath = deriveMarkdownReportPath(VALIDATION_REPORT_PATH);
+    const latestJsonPath = deriveLatestReportPath(VALIDATION_REPORT_PATH);
+    const latestMarkdownPath = deriveMarkdownReportPath(latestJsonPath);
+    await writeFile(markdownPath, markdown, "utf8");
+    await copyFile(VALIDATION_REPORT_PATH, latestJsonPath);
+    await copyFile(markdownPath, latestMarkdownPath);
     console.log("");
     console.log(`Launch evidence summary written to ${VALIDATION_REPORT_PATH}`);
+    console.log(`Launch evidence markdown written to ${markdownPath}`);
+    console.log(`Latest summary JSON artifact updated at ${latestJsonPath}`);
+    console.log(`Latest summary markdown artifact updated at ${latestMarkdownPath}`);
   }
 }
 
@@ -158,6 +168,57 @@ function buildRecommendations(entries) {
   }
 
   return items;
+}
+
+function buildMarkdownSummary(summary) {
+  const lines = [
+    "# Launch Evidence Summary",
+    "",
+    `- Completed at: ${summary.completedAt}`,
+    `- Overall status: ${summary.overallStatus}`,
+    `- Artifacts directory: ${summary.artifactsDirectory}`,
+    `- Goal count: ${summary.goalCount}`,
+    "",
+    "## Goal Status",
+    "",
+    ...summary.goals.map(
+      (goal) =>
+        `- Goal ${goal.goalId}: ${goal.status} (${goal.summary})${
+          goal.artifactPath ? ` Artifact: ${goal.artifactPath}` : ""
+        }`
+    ),
+    "",
+    "## Failing Goals",
+    "",
+    ...(summary.failingGoals.length
+      ? summary.failingGoals.map((goalId) => `- Goal ${goalId}`)
+      : ["- None"]),
+    "",
+    "## Recommendations",
+    "",
+    ...summary.recommendations.map((item) => `- ${item}`),
+    "",
+  ];
+
+  return lines.join("\n");
+}
+
+function deriveMarkdownReportPath(reportPath) {
+  const extension = extname(reportPath);
+  if (!extension) {
+    return `${reportPath}.md`;
+  }
+
+  return reportPath.slice(0, -extension.length) + ".md";
+}
+
+function deriveLatestReportPath(reportPath) {
+  const directory = dirname(reportPath);
+  const extension = extname(reportPath) || ".json";
+  const fileName = basename(reportPath, extension);
+  const prefix = fileName.replace(/-\d{8}-\d{6}$/, "");
+
+  return join(directory, `${prefix}-latest${extension}`);
 }
 
 function getEnv(key) {
