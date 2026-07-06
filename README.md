@@ -25,6 +25,12 @@ Sentinel Flow v1 is a narrow, premium product:
 - Fewer moving parts over speculative architecture
 - Production-ready slices over demo-only breadth
 
+## Runtime baseline
+
+- Node.js `22+` for the `web/` app
+- Go `1.26+` for the `engine/` service
+- `.nvmrc` files are included at the repo root and in `web/` for local runtime alignment
+
 ## Current status
 
 The web app and engine are both now executable, and the current focus is live production validation of Telegram delivery, persisted alert history, and end-to-end reliability.

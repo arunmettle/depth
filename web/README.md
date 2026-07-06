@@ -12,13 +12,14 @@ Sentinel Flow web is the Next.js surface for onboarding, configuration, proof hi
 
 ## Local setup
 
-1. Copy `.env.example` to `.env.local`
-2. Add `NEXT_PUBLIC_SUPABASE_URL`
-3. Add `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-4. Add `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` for Telegram persistence
-5. Add `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, and `TELEGRAM_LINK_SECRET` for Telegram linking
-6. Add `TELEGRAM_WEBHOOK_SECRET` and configure the same value on the Telegram webhook for request verification
-7. Run `pnpm dev`
+1. Use Node.js `22+` for local work on `web/`
+2. Copy `.env.example` to `.env.local`
+3. Add `NEXT_PUBLIC_SUPABASE_URL`
+4. Add `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+5. Add `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` for Telegram persistence
+6. Add `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, and `TELEGRAM_LINK_SECRET` for Telegram linking
+7. Add `TELEGRAM_WEBHOOK_SECRET` and configure the same value on the Telegram webhook for request verification
+8. Run `pnpm dev`
 
 Webhook helper:
 
@@ -27,6 +28,7 @@ node ..\\scripts\\configure-telegram-webhook.mjs
 ```
 
 If Supabase credentials are not present, the shell still builds and clearly reports that auth is not configured yet.
+The web package now declares `engines.node >=22` so local and deployment runtimes stay aligned with current Supabase support guidance.
 
 ## Current status
 

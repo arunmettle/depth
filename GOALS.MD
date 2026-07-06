@@ -68,6 +68,7 @@ Delivers the production-safe app shell, protected routes, and UI primitives so t
 - Shared navigation and shell components added
 - Build-safe behavior added for missing Supabase environment values
 - External Google font dependency removed to reduce fragility
+- Web runtime contract now explicitly requires Node `22+`, reducing drift against current Supabase support expectations
 
 ### To Achieve
 
