@@ -36,6 +36,7 @@ Notes:
 - Add `SUPABASE_URL` and `SUPABASE_SECRET_KEY` when you want the harness to compare live Stripe configuration against persisted `billing_accounts` rows.
 - Use `VALIDATION_USER_ID` to scope the Supabase billing check to one real trader account.
 - If `VALIDATION_REPORT_PATH` is set, the harness writes timestamped JSON and markdown artifacts plus stable `*-latest` copies.
+- For a shared starting point across all live signoff flows, use [validation.env.example](/C:/Dev/Depth/docs/validation.env.example).
 
 ## Commands
 

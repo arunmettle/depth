@@ -413,6 +413,7 @@ Confirms the MVP is genuinely safe for real users, credible to market publicly, 
 - A Windows-friendly Goal 10 runner now stamps JSON and markdown launch-audit artifacts, including stable latest-copy evidence files
 - Goal 10 artifact generation has been smoke-checked locally with successful route, test, and build evidence output against the running web app
 - Goal 10 launch audit now includes a per-goal environment preflight so missing live-service setup is visible before delegated validation failures
+- Live validation docs now share one reusable environment template so multi-goal signoff setup is easier to stage consistently
 
 ### To Achieve
 

@@ -33,11 +33,14 @@ The delegated goal harnesses also rely on their own existing environment:
 
 The launch audit now reports a per-goal environment preflight section before delegated results so missing setup is visible immediately.
 
+For a shared starting point, use [validation.env.example](/C:/Dev/Depth/docs/validation.env.example).
+
 Notes:
 
 - `VALIDATION_ROUTE_PATHS` can be reduced or expanded, but the default set covers the core launch surfaces.
 - `VALIDATION_INCLUDE_GOALS` controls which existing live-service harnesses are delegated from Goal 10.
 - If `VALIDATION_REPORT_PATH` is set, the audit writes timestamped JSON and markdown artifacts plus stable `*-latest` copies.
+- The shared validation template intentionally includes more variables than any single goal needs so one operator file can support the full launch signoff flow.
 
 ## Run the launch audit
 

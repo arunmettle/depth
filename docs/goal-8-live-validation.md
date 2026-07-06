@@ -47,6 +47,7 @@ Notes:
 - When `VALIDATION_REPORT_PATH` is set, the harness also writes a sibling markdown summary for fast human review.
 - The saved artifacts now include sanitized run configuration and recommended next steps, so the evidence stands on its own.
 - The harness also refreshes stable `*-latest.json` and `*-latest.md` copies in the same directory for easy access to the newest run.
+- For a shared starting point across all live signoff flows, use [validation.env.example](/C:/Dev/Depth/docs/validation.env.example).
 
 ## Run the validation harness
 
