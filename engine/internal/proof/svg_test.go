@@ -39,6 +39,7 @@ func TestRenderSVGIncludesCoreProofContent(t *testing.T) {
 		`Sentinel Flow Proof`,
 		`BTCUSDT BUY 1m`,
 		`BUY IMBALANCE`,
+		`Flow Strip`,
 		`Trade Plan`,
 		`Entry`,
 		`103980.00`,

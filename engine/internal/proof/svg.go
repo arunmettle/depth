@@ -45,43 +45,25 @@ func RenderSVG(snapshot Snapshot) string {
 	builder.WriteString(renderWrappedText(56, 220, 18, "#50473d", setupSummary(snapshot.Event), 68, 24))
 	builder.WriteString(fmt.Sprintf(`<text x="56" y="268" font-family="'Segoe UI', Arial, sans-serif" font-size="16" fill="#7a6c59">Recorded %s UTC</text>`, escape(snapshot.Event.BucketStart.UTC().Format("2006-01-02 15:04:05"))))
 
-	builder.WriteString(`<rect x="56" y="286" width="608" height="188" rx="22" fill="#f7f1e6" stroke="#e0d5c3" stroke-width="2"/>`)
-	builder.WriteString(`<text x="80" y="324" font-family="'Segoe UI', Arial, sans-serif" font-size="20" font-weight="700" fill="#2e261d">Trade Plan</text>`)
-	builder.WriteString(metricTile(80, 348, 132, 98, "Entry", formatPrice(snapshot.Event.TradePlan.EntryPrice)))
-	builder.WriteString(metricTile(228, 348, 132, 98, "Stop", formatPrice(snapshot.Event.TradePlan.StopLoss)))
-	builder.WriteString(metricTile(376, 348, 132, 98, "TP1", formatPrice(snapshot.Event.TradePlan.TakeProfit1)))
-	builder.WriteString(metricTile(524, 348, 116, 98, "TP2", formatPrice(snapshot.Event.TradePlan.TakeProfit2)))
+	builder.WriteString(`<rect x="56" y="286" width="608" height="236" rx="22" fill="#f7f1e6" stroke="#e0d5c3" stroke-width="2"/>`)
+	builder.WriteString(`<text x="80" y="324" font-family="'Segoe UI', Arial, sans-serif" font-size="20" font-weight="700" fill="#2e261d">Flow Strip</text>`)
+	builder.WriteString(`<text x="80" y="346" font-family="'Segoe UI', Arial, sans-serif" font-size="14" fill="#7a6c59">3-candle confirmation window rendered as directional dominance bars.</text>`)
+	builder.WriteString(renderFlowStrip(snapshot.Candles, 80, 360, 560, 132))
 
-	builder.WriteString(`<rect x="56" y="498" width="608" height="206" rx="22" fill="#f7f1e6" stroke="#e0d5c3" stroke-width="2"/>`)
-	builder.WriteString(`<text x="80" y="536" font-family="'Segoe UI', Arial, sans-serif" font-size="20" font-weight="700" fill="#2e261d">Confirmation Window</text>`)
-	builder.WriteString(`<text x="80" y="564" font-family="'Segoe UI', Arial, sans-serif" font-size="14" fill="#7a6c59">Time</text>`)
-	builder.WriteString(`<text x="176" y="564" font-family="'Segoe UI', Arial, sans-serif" font-size="14" fill="#7a6c59">Side</text>`)
-	builder.WriteString(`<text x="278" y="564" font-family="'Segoe UI', Arial, sans-serif" font-size="14" fill="#7a6c59">Imbalance</text>`)
-	builder.WriteString(`<text x="432" y="564" font-family="'Segoe UI', Arial, sans-serif" font-size="14" fill="#7a6c59">Close</text>`)
-	builder.WriteString(`<text x="546" y="564" font-family="'Segoe UI', Arial, sans-serif" font-size="14" fill="#7a6c59">Volume</text>`)
+	builder.WriteString(`<rect x="56" y="538" width="608" height="150" rx="22" fill="#f7f1e6" stroke="#e0d5c3" stroke-width="2"/>`)
+	builder.WriteString(`<text x="80" y="576" font-family="'Segoe UI', Arial, sans-serif" font-size="20" font-weight="700" fill="#2e261d">Trade Plan</text>`)
+	builder.WriteString(metricTile(80, 600, 132, 70, "Entry", formatPrice(snapshot.Event.TradePlan.EntryPrice)))
+	builder.WriteString(metricTile(228, 600, 132, 70, "Stop", formatPrice(snapshot.Event.TradePlan.StopLoss)))
+	builder.WriteString(metricTile(376, 600, 132, 70, "TP1", formatPrice(snapshot.Event.TradePlan.TakeProfit1)))
+	builder.WriteString(metricTile(524, 600, 116, 70, "TP2", formatPrice(snapshot.Event.TradePlan.TakeProfit2)))
 
-	rowY := 594
-	for index, candle := range snapshot.Candles {
-		if index > 0 {
-			builder.WriteString(fmt.Sprintf(`<line x1="80" y1="%d" x2="640" y2="%d" stroke="#e6dccd" stroke-width="1"/>`, rowY-18, rowY-18))
-		}
+	builder.WriteString(`<text x="56" y="734" font-family="'Segoe UI', Arial, sans-serif" font-size="22" font-weight="700" fill="#2e261d">Setup Context</text>`)
+	builder.WriteString(metricRow(56, 764, "Rule", snapshot.Event.RuleName))
+	builder.WriteString(metricRow(56, 816, "Signal range", formatSignalRange(snapshot.Event.TradePlan)))
+	builder.WriteString(metricRow(360, 764, "Window bias", window.DominantSummary))
+	builder.WriteString(metricRow(360, 816, "Imbalance", window.RatioSummary))
 
-		sideLabel, sideColor, ratio := candleSignal(candle)
-		builder.WriteString(fmt.Sprintf(`<text x="80" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="600" fill="#2e261d">%s</text>`, rowY, escape(candle.BucketStart.Format("15:04"))))
-		builder.WriteString(fmt.Sprintf(`<text x="176" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="700" fill="%s">%s</text>`, rowY, sideColor, escape(sideLabel)))
-		builder.WriteString(fmt.Sprintf(`<text x="278" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="16" fill="#2e261d">%s</text>`, rowY, escape(ratio)))
-		builder.WriteString(fmt.Sprintf(`<text x="432" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="16" fill="#2e261d">%s</text>`, rowY, escape(formatPrice(candle.Close))))
-		builder.WriteString(fmt.Sprintf(`<text x="546" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="16" fill="#2e261d">%s</text>`, rowY, escape(formatNumber(candle.TotalVolume))))
-		rowY += 40
-	}
-
-	builder.WriteString(`<text x="56" y="760" font-family="'Segoe UI', Arial, sans-serif" font-size="22" font-weight="700" fill="#2e261d">Setup Context</text>`)
-	builder.WriteString(metricRow(56, 790, "Rule", snapshot.Event.RuleName))
-	builder.WriteString(metricRow(56, 842, "Signal range", formatSignalRange(snapshot.Event.TradePlan)))
-	builder.WriteString(metricRow(360, 790, "Window bias", window.DominantSummary))
-	builder.WriteString(metricRow(360, 842, "Imbalance", window.RatioSummary))
-
-	builder.WriteString(`<text x="56" y="900" font-family="'Segoe UI', Arial, sans-serif" font-size="16" fill="#7a6c59">Mobile setup card: why it triggered, where invalidation sits, and where first targets are placed.</text>`)
+	builder.WriteString(`<text x="56" y="900" font-family="'Segoe UI', Arial, sans-serif" font-size="16" fill="#7a6c59">Mobile setup card: the strip shows dominance, the plan shows invalidation, and the bottom explains the signal.</text>`)
 	builder.WriteString(`</svg>`)
 
 	return builder.String()
@@ -113,6 +95,113 @@ func metricTile(x int, y int, width int, height int, label string, value string)
 		y+62,
 		escape(value),
 	)
+}
+
+func renderFlowStrip(candles []marketstate.Candle, x int, y int, width int, height int) string {
+	var builder strings.Builder
+
+	builder.WriteString(fmt.Sprintf(`<rect x="%d" y="%d" width="%d" height="%d" rx="18" fill="#fffaf2" stroke="#e6dccd" stroke-width="1"/>`, x, y, width, height))
+
+	if len(candles) == 0 {
+		builder.WriteString(fmt.Sprintf(`<text x="%d" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="16" fill="#7a6c59">No candle window available</text>`, x+16, y+38))
+		return builder.String()
+	}
+
+	maxVolume := 0.0
+	for _, candle := range candles {
+		if candle.TotalVolume > maxVolume {
+			maxVolume = candle.TotalVolume
+		}
+	}
+	if maxVolume <= 0 {
+		maxVolume = 1
+	}
+
+	cardWidth := (width - 20) / len(candles)
+	cardGap := 10
+	chartHeight := height - 60
+
+	for index, candle := range candles {
+		cardX := x + index*cardWidth
+		if index > 0 {
+			cardX += cardGap
+		}
+		panelWidth := cardWidth - cardGap
+		sideLabel, sideColor, ratio := candleSignal(candle)
+		activity := candle.TotalVolume / maxVolume
+		panelFill := "#f2f8f4"
+		if sideLabel == "Sell" {
+			panelFill = "#fbf0f0"
+		} else if sideLabel == "Balanced" {
+			panelFill = "#f6f3ed"
+		}
+
+		builder.WriteString(fmt.Sprintf(`<rect x="%d" y="%d" width="%d" height="%d" rx="16" fill="%s" stroke="%s" stroke-width="1.2"/>`,
+			cardX,
+			y,
+			panelWidth,
+			height,
+			panelFill,
+			sideColor,
+		))
+		builder.WriteString(fmt.Sprintf(`<text x="%d" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="14" font-weight="700" fill="#2e261d">%s</text>`,
+			cardX+14,
+			y+26,
+			escape(candle.BucketStart.Format("15:04")),
+		))
+		builder.WriteString(fmt.Sprintf(`<text x="%d" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="14" font-weight="700" fill="%s">%s</text>`,
+			cardX+panelWidth-14,
+			y+26,
+			sideColor,
+			escape(ratio),
+		))
+
+		midX := cardX + panelWidth/2
+		chartTop := y + 40
+		chartBottom := y + chartHeight - 8
+		chartWidth := panelWidth - 28
+		barMaxWidth := (chartWidth * 34) / 100
+		if barMaxWidth < 24 {
+			barMaxWidth = 24
+		}
+
+		builder.WriteString(fmt.Sprintf(`<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="%s" stroke-width="2"/>`,
+			midX,
+			chartTop,
+			midX,
+			chartBottom,
+			sideColor,
+		))
+		builder.WriteString(fmt.Sprintf(`<circle cx="%d" cy="%d" r="3" fill="%s"/>`, midX, chartTop, sideColor))
+		builder.WriteString(fmt.Sprintf(`<circle cx="%d" cy="%d" r="3" fill="%s"/>`, midX, chartBottom, sideColor))
+
+		buyWidth := int(float64(barMaxWidth) * (candle.BuyVolume / maxVolume))
+		sellWidth := int(float64(barMaxWidth) * (candle.SellVolume / maxVolume))
+		barY1 := y + 72
+		barY2 := y + 96
+
+		builder.WriteString(fmt.Sprintf(`<text x="%d" y="%d" text-anchor="end" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#4f8f67">Buy</text>`, midX-34, barY1+10))
+		builder.WriteString(fmt.Sprintf(`<rect x="%d" y="%d" width="%d" height="14" rx="7" fill="#138a5b"/>`, midX-30-buyWidth, barY1, buyWidth))
+		builder.WriteString(fmt.Sprintf(`<text x="%d" y="%d" text-anchor="start" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#a25757">Sell</text>`, midX+34, barY2+10))
+		builder.WriteString(fmt.Sprintf(`<rect x="%d" y="%d" width="%d" height="14" rx="7" fill="#b64242"/>`, midX+30, barY2, sellWidth))
+
+		activityHeight := 8 + int(activity*16)
+		builder.WriteString(fmt.Sprintf(`<rect x="%d" y="%d" width="%d" height="%d" rx="4" fill="%s" fill-opacity="0.22"/>`,
+			cardX+12,
+			y+height-18-activityHeight,
+			panelWidth-24,
+			activityHeight,
+			sideColor,
+		))
+
+		builder.WriteString(fmt.Sprintf(`<text x="%d" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#7a6c59">%s</text>`,
+			cardX+14,
+			y+height-8,
+			escape(formatNumber(candle.TotalVolume)),
+		))
+	}
+
+	return builder.String()
 }
 
 type windowSummary struct {
