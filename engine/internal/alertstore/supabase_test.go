@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"sentinelflow/engine/internal/alerts"
+	"sentinelflow/engine/internal/evaluator"
 	"sentinelflow/engine/internal/proof"
 )
 
@@ -44,6 +45,11 @@ func TestSupabaseStoreUpsertPostsAlertHistoryRow(t *testing.T) {
 			t.Fatalf("expected proof content and message in payload: %+v", payload)
 		}
 
+		if payload.TradePlanEntryPrice != 100.5 || payload.TradePlanStopLoss != 99.5 ||
+			payload.TradePlanTakeProfit1 != 101.5 || payload.TradePlanTakeProfit2 != 102.5 {
+			t.Fatalf("expected trade plan fields in payload: %+v", payload)
+		}
+
 		writer.WriteHeader(http.StatusCreated)
 	}))
 	defer server.Close()
@@ -60,7 +66,18 @@ func TestSupabaseStoreUpsertPostsAlertHistoryRow(t *testing.T) {
 		RuleName:       "BTC 1m stacked imbalance",
 		Side:           "buy",
 		Timeframe:      "1m",
-		UserID:         "user-1",
+		TradePlan: evaluator.TradePlan{
+			EntryPrice:   100.5,
+			RiskReward1:  1,
+			RiskReward2:  2,
+			SignalHigh:   101,
+			SignalLow:    99,
+			StopLoss:     99.5,
+			TakeProfit1:  101.5,
+			TakeProfit2:  102.5,
+			TriggerPrice: 100.5,
+		},
+		UserID: "user-1",
 	})
 	if err != nil {
 		t.Fatalf("upsert alert history row: %v", err)

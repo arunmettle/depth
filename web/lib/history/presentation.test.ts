@@ -4,6 +4,8 @@ import {
   getDeliveryLabel,
   getProofImageSrc,
   getSideLabel,
+  getSignalRangeLabel,
+  getTradePlanTiles,
   summarizeProof,
 } from "@/lib/history/presentation";
 import type { AlertRecord } from "@/lib/history/schema";
@@ -57,5 +59,52 @@ describe("history presentation", () => {
         width: 720,
       })
     ).toBeNull();
+  });
+
+  it("builds trade plan tiles for entry, stop, and targets", () => {
+    expect(
+      getTradePlanTiles({
+        entryPrice: 64250.5,
+        riskReward1: 1,
+        riskReward2: 2,
+        signalHigh: 64310,
+        signalLow: 64180,
+        stopLoss: 64120.25,
+        takeProfit1: 64380.75,
+        takeProfit2: 64511,
+        triggerPrice: 64250.5,
+      })
+    ).toEqual([
+      { label: "Entry", value: "64250.50" },
+      { label: "Stop", value: "64120.25" },
+      { label: "TP1", value: "64380.75" },
+      { label: "TP2", value: "64511.00" },
+    ]);
+  });
+
+  it("returns N/A trade plan tiles when no trade plan is present", () => {
+    expect(getTradePlanTiles(undefined)).toEqual([
+      { label: "Entry", value: "N/A" },
+      { label: "Stop", value: "N/A" },
+      { label: "TP1", value: "N/A" },
+      { label: "TP2", value: "N/A" },
+    ]);
+  });
+
+  it("summarizes the signal range from a trade plan", () => {
+    expect(
+      getSignalRangeLabel({
+        entryPrice: 64250.5,
+        riskReward1: 1,
+        riskReward2: 2,
+        signalHigh: 64310,
+        signalLow: 64180,
+        stopLoss: 64120.25,
+        takeProfit1: 64380.75,
+        takeProfit2: 64511,
+        triggerPrice: 64250.5,
+      })
+    ).toBe("64180.00 to 64310.00");
+    expect(getSignalRangeLabel(undefined)).toBe("N/A");
   });
 });

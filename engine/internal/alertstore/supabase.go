@@ -20,21 +20,30 @@ type SupabaseStore struct {
 }
 
 type supabaseAlertHistoryRow struct {
-	CreatedAt      string `json:"created_at"`
-	DeliveryStatus string `json:"delivery_status"`
-	ID             string `json:"id"`
-	MarketSymbol   string `json:"market_symbol"`
-	Message        string `json:"message"`
-	ProofContent   string `json:"proof_content"`
-	ProofHash      string `json:"proof_content_hash"`
-	ProofHeight    int    `json:"proof_height"`
-	ProofMediaType string `json:"proof_media_type"`
-	ProofWidth     int    `json:"proof_width"`
-	RuleName       string `json:"rule_name"`
-	Side           string `json:"side"`
-	Timeframe      string `json:"timeframe"`
-	UpdatedAt      string `json:"updated_at"`
-	UserID         string `json:"user_id"`
+	CreatedAt             string  `json:"created_at"`
+	DeliveryStatus        string  `json:"delivery_status"`
+	ID                    string  `json:"id"`
+	MarketSymbol          string  `json:"market_symbol"`
+	Message               string  `json:"message"`
+	ProofContent          string  `json:"proof_content"`
+	ProofHash             string  `json:"proof_content_hash"`
+	ProofHeight           int     `json:"proof_height"`
+	ProofMediaType        string  `json:"proof_media_type"`
+	ProofWidth            int     `json:"proof_width"`
+	RuleName              string  `json:"rule_name"`
+	Side                  string  `json:"side"`
+	Timeframe             string  `json:"timeframe"`
+	TradePlanEntryPrice   float64 `json:"trade_plan_entry_price"`
+	TradePlanRiskReward1  float64 `json:"trade_plan_risk_reward_1"`
+	TradePlanRiskReward2  float64 `json:"trade_plan_risk_reward_2"`
+	TradePlanSignalHigh   float64 `json:"trade_plan_signal_high"`
+	TradePlanSignalLow    float64 `json:"trade_plan_signal_low"`
+	TradePlanStopLoss     float64 `json:"trade_plan_stop_loss"`
+	TradePlanTakeProfit1  float64 `json:"trade_plan_take_profit_1"`
+	TradePlanTakeProfit2  float64 `json:"trade_plan_take_profit_2"`
+	TradePlanTriggerPrice float64 `json:"trade_plan_trigger_price"`
+	UpdatedAt             string  `json:"updated_at"`
+	UserID                string  `json:"user_id"`
 }
 
 func NewSupabaseStore(projectURL string, secretKey string) *SupabaseStore {
@@ -101,20 +110,29 @@ func mapAlertHistoryRow(record alerts.Record) supabaseAlertHistoryRow {
 	now := time.Now().UTC()
 
 	return supabaseAlertHistoryRow{
-		CreatedAt:      createdAt.Format(time.RFC3339),
-		DeliveryStatus: string(record.DeliveryStatus),
-		ID:             record.ID,
-		MarketSymbol:   record.MarketSymbol,
-		Message:        record.Message,
-		ProofContent:   record.Proof.Content,
-		ProofHash:      record.Proof.ContentHash,
-		ProofHeight:    record.Proof.Height,
-		ProofMediaType: record.Proof.MediaType,
-		ProofWidth:     record.Proof.Width,
-		RuleName:       record.RuleName,
-		Side:           record.Side,
-		Timeframe:      record.Timeframe,
-		UpdatedAt:      now.Format(time.RFC3339),
-		UserID:         record.UserID,
+		CreatedAt:             createdAt.Format(time.RFC3339),
+		DeliveryStatus:        string(record.DeliveryStatus),
+		ID:                    record.ID,
+		MarketSymbol:          record.MarketSymbol,
+		Message:               record.Message,
+		ProofContent:          record.Proof.Content,
+		ProofHash:             record.Proof.ContentHash,
+		ProofHeight:           record.Proof.Height,
+		ProofMediaType:        record.Proof.MediaType,
+		ProofWidth:            record.Proof.Width,
+		RuleName:              record.RuleName,
+		Side:                  record.Side,
+		Timeframe:             record.Timeframe,
+		TradePlanEntryPrice:   record.TradePlan.EntryPrice,
+		TradePlanRiskReward1:  record.TradePlan.RiskReward1,
+		TradePlanRiskReward2:  record.TradePlan.RiskReward2,
+		TradePlanSignalHigh:   record.TradePlan.SignalHigh,
+		TradePlanSignalLow:    record.TradePlan.SignalLow,
+		TradePlanStopLoss:     record.TradePlan.StopLoss,
+		TradePlanTakeProfit1:  record.TradePlan.TakeProfit1,
+		TradePlanTakeProfit2:  record.TradePlan.TakeProfit2,
+		TradePlanTriggerPrice: record.TradePlan.TriggerPrice,
+		UpdatedAt:             now.Format(time.RFC3339),
+		UserID:                record.UserID,
 	}
 }

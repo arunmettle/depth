@@ -6,6 +6,18 @@ export type ProofArtifact = {
   width: number;
 };
 
+export type TradePlan = {
+  entryPrice: number;
+  riskReward1: number;
+  riskReward2: number;
+  signalHigh: number;
+  signalLow: number;
+  stopLoss: number;
+  takeProfit1: number;
+  takeProfit2: number;
+  triggerPrice: number;
+};
+
 export type AlertDeliveryStatus =
   | "delivered"
   | "evaluated"
@@ -22,6 +34,7 @@ export type AlertRecord = {
   ruleName: string;
   side: "buy" | "sell";
   timeframe: "1m" | "5m" | "15m";
+  tradePlan?: TradePlan;
 };
 
 export type AlertHistoryItem = AlertRecord;

@@ -147,6 +147,25 @@ Success criteria:
 - the image is cleaner and more useful than the current proof card
 - the same proof style can support Telegram and web history
 
+### Goal VP1 Status Update
+
+The Flow Strip proof image (Telegram + engine-rendered SVG) is live in production.
+
+The web history surface now mirrors that same trade-plan framing explicitly:
+
+- Supabase `alert_history` gained nullable `trade_plan_*` columns (entry, stop,
+  TP1, TP2, signal low/high, trigger, risk/reward)
+- the engine now persists the full `TradePlan` alongside every alert record
+- the web app's history list and history detail page both render explicit
+  Entry / Stop / TP1 / TP2 tiles and a signal range line, using the same
+  values the proof image and Telegram caption already show
+- mock and engine-live fallback data carry trade plan data too, so the tiles
+  render consistently across all three history data sources (Supabase, engine,
+  mock)
+
+This closes the last visible gap in VP1: Telegram and web history now present
+the same setup, invalidation, and target framing.
+
 ## Follow-up Goal
 
 ### Goal VP2: Backtest Showcase v1

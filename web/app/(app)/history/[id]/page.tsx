@@ -14,6 +14,8 @@ import {
   getDeliveryLabel,
   getProofImageSrc,
   getSideLabel,
+  getSignalRangeLabel,
+  getTradePlanTiles,
   summarizeProof,
 } from "@/lib/history/presentation";
 import { getHistoryRecordById } from "@/lib/history/source";
@@ -99,6 +101,25 @@ export default async function HistoryDetailPage({
               <p className="text-sm font-medium">Signal side</p>
               <p className="mt-1 text-sm text-muted-foreground">{getSideLabel(item.side)}</p>
             </div>
+            {item.tradePlan ? (
+              <div className="rounded-xl border border-border bg-background p-4">
+                <p className="text-sm font-medium">Trade plan</p>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {getTradePlanTiles(item.tradePlan).map((tile) => (
+                    <div
+                      key={tile.label}
+                      className="rounded-lg border border-border bg-[#f7f1e6] px-3 py-2"
+                    >
+                      <p className="text-xs text-muted-foreground">{tile.label}</p>
+                      <p className="text-sm font-semibold">{tile.value}</p>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Signal range {getSignalRangeLabel(item.tradePlan)}
+                </p>
+              </div>
+            ) : null}
             <div className="rounded-xl border border-border bg-background p-4">
               <p className="text-sm font-medium">Proof artifact</p>
               <p className="mt-1 break-all text-sm text-muted-foreground">

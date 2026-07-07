@@ -2,6 +2,9 @@ import type { AlertRecord } from "@/lib/history/schema";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
+const SELECT_COLUMNS =
+  "created_at,delivery_status,id,market_symbol,message,proof_content,proof_content_hash,proof_height,proof_media_type,proof_width,rule_name,side,timeframe,user_id,trade_plan_entry_price,trade_plan_stop_loss,trade_plan_take_profit_1,trade_plan_take_profit_2,trade_plan_signal_low,trade_plan_signal_high,trade_plan_trigger_price,trade_plan_risk_reward_1,trade_plan_risk_reward_2";
+
 type AlertHistoryRow = {
   created_at: string;
   delivery_status: AlertRecord["deliveryStatus"];
@@ -16,8 +19,35 @@ type AlertHistoryRow = {
   rule_name: string;
   side: AlertRecord["side"];
   timeframe: AlertRecord["timeframe"];
+  trade_plan_entry_price: number | null;
+  trade_plan_risk_reward_1: number | null;
+  trade_plan_risk_reward_2: number | null;
+  trade_plan_signal_high: number | null;
+  trade_plan_signal_low: number | null;
+  trade_plan_stop_loss: number | null;
+  trade_plan_take_profit_1: number | null;
+  trade_plan_take_profit_2: number | null;
+  trade_plan_trigger_price: number | null;
   user_id: string;
 };
+
+function mapTradePlan(row: AlertHistoryRow): AlertRecord["tradePlan"] {
+  if (row.trade_plan_entry_price === null || row.trade_plan_entry_price === undefined) {
+    return undefined;
+  }
+
+  return {
+    entryPrice: row.trade_plan_entry_price,
+    riskReward1: row.trade_plan_risk_reward_1 ?? 0,
+    riskReward2: row.trade_plan_risk_reward_2 ?? 0,
+    signalHigh: row.trade_plan_signal_high ?? 0,
+    signalLow: row.trade_plan_signal_low ?? 0,
+    stopLoss: row.trade_plan_stop_loss ?? 0,
+    takeProfit1: row.trade_plan_take_profit_1 ?? 0,
+    takeProfit2: row.trade_plan_take_profit_2 ?? 0,
+    triggerPrice: row.trade_plan_trigger_price ?? 0,
+  };
+}
 
 function mapAlertHistoryRow(row: AlertHistoryRow): AlertRecord {
   return {
@@ -36,6 +66,7 @@ function mapAlertHistoryRow(row: AlertHistoryRow): AlertRecord {
     ruleName: row.rule_name,
     side: row.side,
     timeframe: row.timeframe,
+    tradePlan: mapTradePlan(row),
   };
 }
 
@@ -55,9 +86,7 @@ export async function getPersistedAlertHistoryForCurrentUser(): Promise<AlertRec
 
   const { data, error } = await supabase
     .from("alert_history")
-    .select(
-      "created_at,delivery_status,id,market_symbol,message,proof_content,proof_content_hash,proof_height,proof_media_type,proof_width,rule_name,side,timeframe,user_id"
-    )
+    .select(SELECT_COLUMNS)
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -86,9 +115,7 @@ export async function getPersistedAlertHistoryRecordForCurrentUser(
 
   const { data, error } = await supabase
     .from("alert_history")
-    .select(
-      "created_at,delivery_status,id,market_symbol,message,proof_content,proof_content_hash,proof_height,proof_media_type,proof_width,rule_name,side,timeframe,user_id"
-    )
+    .select(SELECT_COLUMNS)
     .eq("user_id", user.id)
     .eq("id", id)
     .maybeSingle();

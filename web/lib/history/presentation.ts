@@ -2,6 +2,7 @@ import type {
   AlertDeliveryStatus,
   AlertRecord,
   ProofArtifact,
+  TradePlan,
 } from "@/lib/history/schema";
 
 export function getDeliveryLabel(status: AlertDeliveryStatus) {
@@ -40,4 +41,29 @@ export function getProofImageSrc(proof: ProofArtifact) {
     default:
       return null;
   }
+}
+
+export function formatTradePlanPrice(value: number | undefined) {
+  if (value === undefined || value === 0) {
+    return "N/A";
+  }
+
+  return Math.abs(value) >= 1000 ? value.toFixed(2) : value.toFixed(4);
+}
+
+export function getTradePlanTiles(tradePlan: TradePlan | undefined) {
+  return [
+    { label: "Entry", value: formatTradePlanPrice(tradePlan?.entryPrice) },
+    { label: "Stop", value: formatTradePlanPrice(tradePlan?.stopLoss) },
+    { label: "TP1", value: formatTradePlanPrice(tradePlan?.takeProfit1) },
+    { label: "TP2", value: formatTradePlanPrice(tradePlan?.takeProfit2) },
+  ];
+}
+
+export function getSignalRangeLabel(tradePlan: TradePlan | undefined) {
+  if (!tradePlan || (tradePlan.signalLow <= 0 && tradePlan.signalHigh <= 0)) {
+    return "N/A";
+  }
+
+  return `${formatTradePlanPrice(tradePlan.signalLow)} to ${formatTradePlanPrice(tradePlan.signalHigh)}`;
 }

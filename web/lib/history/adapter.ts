@@ -20,5 +20,6 @@ export function fromEngineRecentAlert(record: EngineRecentAlertRecord): AlertRec
     ruleName: record.ruleName,
     side: record.side,
     timeframe: record.timeframe,
+    tradePlan: record.tradePlan,
   };
 }
