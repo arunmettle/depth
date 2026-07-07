@@ -20,16 +20,17 @@ const (
 )
 
 type Record struct {
-	CreatedAt      time.Time      `json:"createdAt"`
-	DeliveryStatus DeliveryStatus `json:"deliveryStatus"`
-	ID             string         `json:"id"`
-	MarketSymbol   string         `json:"marketSymbol"`
-	Message        string         `json:"message"`
-	Proof          proof.Artifact `json:"proof"`
-	RuleName       string         `json:"ruleName"`
-	Side           string         `json:"side"`
-	Timeframe      string         `json:"timeframe"`
-	UserID         string         `json:"-"`
+	CreatedAt      time.Time           `json:"createdAt"`
+	DeliveryStatus DeliveryStatus      `json:"deliveryStatus"`
+	ID             string              `json:"id"`
+	MarketSymbol   string              `json:"marketSymbol"`
+	Message        string              `json:"message"`
+	Proof          proof.Artifact      `json:"proof"`
+	RuleName       string              `json:"ruleName"`
+	Side           string              `json:"side"`
+	Timeframe      string              `json:"timeframe"`
+	TradePlan      evaluator.TradePlan `json:"tradePlan"`
+	UserID         string              `json:"-"`
 }
 
 func NewRecord(event evaluator.Event, artifact proof.Artifact) Record {
@@ -43,6 +44,7 @@ func NewRecord(event evaluator.Event, artifact proof.Artifact) Record {
 		RuleName:       event.RuleName,
 		Side:           event.Side,
 		Timeframe:      event.Timeframe,
+		TradePlan:      event.TradePlan,
 		UserID:         event.UserID,
 	}
 }

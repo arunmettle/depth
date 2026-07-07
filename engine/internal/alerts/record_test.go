@@ -17,6 +17,13 @@ func TestNewRecordBuildsStableAlertShape(t *testing.T) {
 		Side:        "buy",
 		Symbol:      "BTCUSDT",
 		Timeframe:   "1m",
+		TradePlan: evaluator.TradePlan{
+			EntryPrice:   104050.25,
+			StopLoss:     103980,
+			TakeProfit1:  104120.50,
+			TakeProfit2:  104190.75,
+			TriggerPrice: 104050.25,
+		},
 	}
 
 	record := NewRecord(event, proof.NewSVGArtifact("<svg></svg>"))
@@ -31,6 +38,10 @@ func TestNewRecordBuildsStableAlertShape(t *testing.T) {
 
 	if record.Proof.ContentHash == "" {
 		t.Fatal("expected proof artifact metadata to be preserved")
+	}
+
+	if record.TradePlan.EntryPrice != 104050.25 || record.TradePlan.StopLoss != 103980 {
+		t.Fatalf("expected trade plan to be preserved: %+v", record.TradePlan)
 	}
 }
 

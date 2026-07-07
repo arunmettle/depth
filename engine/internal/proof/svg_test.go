@@ -19,6 +19,13 @@ func TestRenderSVGIncludesCoreProofContent(t *testing.T) {
 			Side:        "buy",
 			Symbol:      "BTCUSDT",
 			Timeframe:   "1m",
+			TradePlan: evaluator.TradePlan{
+				EntryPrice:   104050.25,
+				StopLoss:     103980,
+				TakeProfit1:  104120.50,
+				TakeProfit2:  104190.75,
+				TriggerPrice: 104050.25,
+			},
 		},
 		Candles: []marketstate.Candle{
 			{BucketStart: time.Date(2026, 7, 5, 6, 0, 0, 0, time.UTC), BuyVolume: 1.0, SellVolume: 0.2, Close: 104000.5, TotalVolume: 1.2},
@@ -32,8 +39,11 @@ func TestRenderSVGIncludesCoreProofContent(t *testing.T) {
 		`Sentinel Flow Proof`,
 		`BTCUSDT BUY 1m`,
 		`BUY IMBALANCE`,
-		`BTC 1m stacked imbalance`,
-		`104050.25`,
+		`Trade Plan`,
+		`Entry`,
+		`103980.00`,
+		`104120.50`,
+		`Signal range`,
 	} {
 		if !strings.Contains(svg, expected) {
 			t.Fatalf("expected SVG to contain %q", expected)

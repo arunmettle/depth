@@ -53,7 +53,7 @@ func TestSendAlertPhotoPostsMultipartTelegramRequest(t *testing.T) {
 			t.Fatalf("unexpected chat_id: %s", fields["chat_id"])
 		}
 
-		if !strings.Contains(fields["caption"], "BTCUSDT BUY 1m") {
+		if !strings.Contains(fields["caption"], "BTCUSDT | BUY | 1m") {
 			t.Fatalf("unexpected caption: %s", fields["caption"])
 		}
 

@@ -40,6 +40,14 @@ func TestEvaluateEmitsStackedImbalanceEvent(t *testing.T) {
 	if event.Symbol != "BTCUSDT" || event.Timeframe != "1m" {
 		t.Fatalf("unexpected event target: %s %s", event.Symbol, event.Timeframe)
 	}
+
+	if event.TradePlan.EntryPrice != 100010 || event.TradePlan.StopLoss != 100000 {
+		t.Fatalf("unexpected trade plan core values: %+v", event.TradePlan)
+	}
+
+	if event.TradePlan.TakeProfit1 != 100020 || event.TradePlan.TakeProfit2 != 100030 {
+		t.Fatalf("unexpected trade plan targets: %+v", event.TradePlan)
+	}
 }
 
 func TestEvaluateSuppressesDuplicateForSameBucket(t *testing.T) {

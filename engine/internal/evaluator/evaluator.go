@@ -33,7 +33,20 @@ type Event struct {
 	Side        string    `json:"side"`
 	Symbol      string    `json:"symbol"`
 	Timeframe   string    `json:"timeframe"`
+	TradePlan   TradePlan `json:"tradePlan"`
 	UserID      string    `json:"userId,omitempty"`
+}
+
+type TradePlan struct {
+	EntryPrice   float64 `json:"entryPrice"`
+	RiskReward1  float64 `json:"riskReward1"`
+	RiskReward2  float64 `json:"riskReward2"`
+	SignalHigh   float64 `json:"signalHigh"`
+	SignalLow    float64 `json:"signalLow"`
+	StopLoss     float64 `json:"stopLoss"`
+	TakeProfit1  float64 `json:"takeProfit1"`
+	TakeProfit2  float64 `json:"takeProfit2"`
+	TriggerPrice float64 `json:"triggerPrice"`
 }
 
 type Evaluator struct {
@@ -115,21 +128,31 @@ func (e *Evaluator) Evaluate(rule Rule) (*Event, bool) {
 		return nil, false
 	}
 
+	tradePlan, ok := buildTradePlan(window, side)
+	if !ok {
+		return nil, false
+	}
+
 	return &Event{
 		BucketStart: current.BucketStart,
 		Message: fmt.Sprintf(
-			"%s %s %s stacked imbalance confirmed across %d candles at %.0f%% threshold.",
+			"%s %s %s stacked imbalance confirmed across %d candles at %.0f%% threshold. Entry %.2f, stop %.2f, TP1 %.2f, TP2 %.2f.",
 			rule.MarketSymbol,
 			rule.Timeframe,
 			side,
 			required,
 			rule.StackedImbalance.ThresholdMultiplier,
+			tradePlan.EntryPrice,
+			tradePlan.StopLoss,
+			tradePlan.TakeProfit1,
+			tradePlan.TakeProfit2,
 		),
 		RuleID:    rule.ID,
 		RuleName:  rule.Name,
 		Side:      side,
 		Symbol:    rule.MarketSymbol,
 		Timeframe: rule.Timeframe,
+		TradePlan: tradePlan,
 		UserID:    rule.UserID,
 	}, true
 }
@@ -185,6 +208,71 @@ func imbalanceRatio(dominant float64, opposing float64) float64 {
 	}
 
 	return dominant / opposing
+}
+
+func buildTradePlan(candles []marketstate.Candle, side string) (TradePlan, bool) {
+	if len(candles) == 0 {
+		return TradePlan{}, false
+	}
+
+	signalHigh := candles[0].High
+	signalLow := candles[0].Low
+	for _, candle := range candles[1:] {
+		if candle.High > signalHigh {
+			signalHigh = candle.High
+		}
+		if candle.Low < signalLow {
+			signalLow = candle.Low
+		}
+	}
+
+	entry := candles[len(candles)-1].Close
+	switch side {
+	case "buy":
+		risk := entry - signalLow
+		if risk <= 0 {
+			risk = minimumRiskDistance(entry)
+		}
+
+		return TradePlan{
+			EntryPrice:   entry,
+			RiskReward1:  1,
+			RiskReward2:  2,
+			SignalHigh:   signalHigh,
+			SignalLow:    signalLow,
+			StopLoss:     entry - risk,
+			TakeProfit1:  entry + risk,
+			TakeProfit2:  entry + (2 * risk),
+			TriggerPrice: entry,
+		}, true
+	case "sell":
+		risk := signalHigh - entry
+		if risk <= 0 {
+			risk = minimumRiskDistance(entry)
+		}
+
+		return TradePlan{
+			EntryPrice:   entry,
+			RiskReward1:  1,
+			RiskReward2:  2,
+			SignalHigh:   signalHigh,
+			SignalLow:    signalLow,
+			StopLoss:     entry + risk,
+			TakeProfit1:  entry - risk,
+			TakeProfit2:  entry - (2 * risk),
+			TriggerPrice: entry,
+		}, true
+	default:
+		return TradePlan{}, false
+	}
+}
+
+func minimumRiskDistance(entry float64) float64 {
+	if entry <= 0 {
+		return 1
+	}
+
+	return math.Max(entry*0.0005, 1)
 }
 
 func duplicateKey(ruleID string, bucketStart time.Time, side string) string {

@@ -1,5 +1,6 @@
 import { AlertRuleForm } from "@/components/alert-rule-form";
 import { AlertRuleList } from "@/components/alert-rule-list";
+import { getAlertRuleReplayPreviews } from "@/lib/alerts/replay";
 import { getAlertRuleForCurrentUser, getAlertRulesForCurrentUser } from "@/lib/alerts/rules";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -13,6 +14,11 @@ import {
 import Link from "next/link";
 import { describeActiveRuleLimit } from "@/lib/billing/plans";
 import { getBillingAccountForCurrentUser } from "@/lib/billing/subscriptions";
+import { getEngineRuntimeSummary } from "@/lib/engine-status/source";
+import { getHistorySource } from "@/lib/history/source";
+import { getProductPathState } from "@/lib/product-path";
+import { getAuthState } from "@/lib/supabase/server";
+import { getTelegramConnectionForCurrentUser } from "@/lib/telegram/connections";
 import { cn } from "@/lib/utils";
 
 const alertRuleTypes = [
@@ -34,8 +40,21 @@ export default async function AlertsPage({
   searchParams: Promise<{ edit?: string }>;
 }) {
   const params = await searchParams;
+  const auth = await getAuthState();
   const rules = await getAlertRulesForCurrentUser();
+  const replayPreviews = await getAlertRuleReplayPreviews(rules);
   const billingAccount = await getBillingAccountForCurrentUser();
+  const engine = await getEngineRuntimeSummary();
+  const history = await getHistorySource();
+  const telegramConnection = auth.isAuthenticated
+    ? await getTelegramConnectionForCurrentUser()
+    : null;
+  const productPath = getProductPathState({
+    engine,
+    historyCount: history.items.length,
+    rules,
+    telegramConnection,
+  });
   const selectedRule = params.edit
     ? await getAlertRuleForCurrentUser(params.edit)
     : null;
@@ -62,6 +81,52 @@ export default async function AlertsPage({
           </CardContent>
         </Card>
       ) : null}
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={productPath.complete ? "default" : "secondary"}>
+              {productPath.complete ? "Live path ready" : "Build the live path"}
+            </Badge>
+            <Badge variant="outline">{productPath.activeRuleCount} active rules</Badge>
+          </div>
+          <CardTitle>Alert operating path</CardTitle>
+          <CardDescription>
+            Keep rule setup tied to the real product loop: Telegram destination,
+            active rule, engine visibility, and proof review.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            {productPath.items.map((item) => (
+              <div
+                key={item.label}
+                className="rounded-xl border border-border bg-background px-4 py-4"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <Badge variant={item.ready ? "outline" : "secondary"}>
+                    {item.ready ? "Ready" : "Blocked"}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">{item.detail}</p>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-xl border border-border bg-background px-4 py-4">
+            <p className="text-sm font-medium">{productPath.nextAction.label}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {productPath.nextAction.detail}
+            </p>
+            <Link
+              href={productPath.nextAction.href}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-3")}
+            >
+              {productPath.nextAction.label}
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -92,11 +157,11 @@ export default async function AlertsPage({
         <CardHeader>
           <CardTitle>Saved rules</CardTitle>
           <CardDescription>
-            These are the rules that can eventually feed the live market engine and Telegram delivery loop.
+            These rules now include a recent replay preview so users can judge selectivity and short-horizon follow-through before trusting the live path.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <AlertRuleList rules={rules} />
+          <AlertRuleList replayPreviews={replayPreviews} rules={rules} />
         </CardContent>
       </Card>
 
