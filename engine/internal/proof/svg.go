@@ -56,7 +56,7 @@ func RenderSVG(snapshot Snapshot) string {
 	builder.WriteString(metricTile(80, 600, 132, 70, "Entry", formatPrice(snapshot.Event.TradePlan.EntryPrice)))
 	builder.WriteString(metricTile(228, 600, 132, 70, "Stop", formatPrice(snapshot.Event.TradePlan.StopLoss)))
 	builder.WriteString(metricTile(376, 600, 132, 70, "TP1", formatPrice(snapshot.Event.TradePlan.TakeProfit1)))
-	builder.WriteString(metricTile(524, 600, 116, 70, "TP2", formatPrice(snapshot.Event.TradePlan.TakeProfit2)))
+	builder.WriteString(metricTile(524, 600, 132, 70, "TP2", formatPrice(snapshot.Event.TradePlan.TakeProfit2)))
 
 	const orderBookBoxY = 704
 	const orderBookBoxHeight = 336
@@ -181,7 +181,7 @@ func renderOrderBookLadder(book marketstate.OrderBookSnapshot, x int, y int, wid
 
 	builder.WriteString(fmt.Sprintf(`<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#d9cdb8" stroke-width="1"/>`, x+8, rowY+2, x+width-8, rowY+2))
 	builder.WriteString(fmt.Sprintf(`<text x="%d" y="%d" text-anchor="end" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#7a6c59">%s</text>`, x+width-8, rowY+18, escape(orderBookImbalanceLabel(totalBidSize, totalAskSize))))
-	rowY += 26
+	rowY += 36
 
 	// Best bid renders first so it lands just below the midline, decreasing
 	// in price further down the ladder.
@@ -280,8 +280,8 @@ func renderFlowStrip(candles []marketstate.Candle, x int, y int, width int, heig
 			y+26,
 			escape(candle.BucketStart.Format("15:04")),
 		))
-		builder.WriteString(fmt.Sprintf(`<text x="%d" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="14" font-weight="700" fill="%s">%s</text>`,
-			cardX+panelWidth-14,
+		builder.WriteString(fmt.Sprintf(`<text x="%d" y="%d" text-anchor="end" font-family="'Segoe UI', Arial, sans-serif" font-size="14" font-weight="700" fill="%s">%s</text>`,
+			cardX+panelWidth-10,
 			y+26,
 			sideColor,
 			escape(ratio),
