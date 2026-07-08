@@ -25,13 +25,13 @@ func RenderSVG(snapshot Snapshot) string {
 		accentSoft = "#f4dddd"
 	}
 
-	width := 720
-	height := 960
+	width := DefaultWidth
+	height := DefaultHeight
 	window := summarizeWindow(snapshot.Candles)
 
 	builder.WriteString(fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d" role="img" aria-label="Sentinel Flow proof snapshot">`, width, height, width, height))
 	builder.WriteString(`<rect width="100%" height="100%" fill="#f4efe6"/>`)
-	builder.WriteString(`<rect x="32" y="32" width="656" height="896" rx="28" fill="#fffaf2" stroke="#d9cdb8" stroke-width="2"/>`)
+	builder.WriteString(`<rect x="32" y="32" width="656" height="976" rx="28" fill="#fffaf2" stroke="#d9cdb8" stroke-width="2"/>`)
 	builder.WriteString(`<text x="56" y="84" font-family="'Segoe UI', Arial, sans-serif" font-size="18" fill="#766956">Sentinel Flow Proof</text>`)
 	builder.WriteString(fmt.Sprintf(`<text x="56" y="132" font-family="'Segoe UI', Arial, sans-serif" font-size="34" font-weight="700" fill="#1f1a14">%s %s %s</text>`,
 		escape(snapshot.Event.Symbol),
@@ -58,26 +58,37 @@ func RenderSVG(snapshot Snapshot) string {
 	builder.WriteString(metricTile(524, 600, 116, 70, "TP2", formatPrice(snapshot.Event.TradePlan.TakeProfit2)))
 
 	builder.WriteString(`<text x="56" y="734" font-family="'Segoe UI', Arial, sans-serif" font-size="22" font-weight="700" fill="#2e261d">Setup Context</text>`)
-	builder.WriteString(metricRow(56, 764, "Rule", snapshot.Event.RuleName))
-	builder.WriteString(metricRow(56, 816, "Signal range", formatSignalRange(snapshot.Event.TradePlan)))
-	builder.WriteString(metricRow(360, 764, "Window bias", window.DominantSummary))
-	builder.WriteString(metricRow(360, 816, "Imbalance", window.RatioSummary))
+	builder.WriteString(fullWidthMetricRow(56, 764, 608, "Rule", snapshot.Event.RuleName))
+	builder.WriteString(fullWidthMetricRow(56, 838, 608, "Signal range", formatSignalRange(snapshot.Event.TradePlan)))
+	builder.WriteString(fullWidthMetricRow(56, 900, 608, "Window bias", fmt.Sprintf("%s (%s)", window.DominantSummary, window.RatioSummary)))
 
-	builder.WriteString(`<text x="56" y="900" font-family="'Segoe UI', Arial, sans-serif" font-size="16" fill="#7a6c59">Mobile setup card: the strip shows dominance, the plan shows invalidation, and the bottom explains the signal.</text>`)
+	builder.WriteString(`<text x="56" y="984" font-family="'Segoe UI', Arial, sans-serif" font-size="16" fill="#7a6c59">Mobile setup card: the strip shows dominance, the plan shows invalidation, and the bottom explains the signal.</text>`)
 	builder.WriteString(`</svg>`)
 
 	return builder.String()
 }
 
-func metricRow(x int, y int, label string, value string) string {
+// fullWidthMetricRow renders a label/value pair on its own full-width row so
+// long values (rule names, signal ranges) cannot visually collide with a
+// neighboring column. The value is truncated with an ellipsis if it would
+// otherwise overflow the row width at the rendered font size.
+func fullWidthMetricRow(x int, y int, width int, label string, value string) string {
+	const fontSize = 22
+	const avgCharWidth = 12.5
+	maxChars := int(float64(width) / avgCharWidth)
+	if maxChars < 8 {
+		maxChars = 8
+	}
+
 	return fmt.Sprintf(
-		`<text x="%d" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="16" fill="#7a6c59">%s</text><text x="%d" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="26" font-weight="700" fill="#201a14">%s</text>`,
+		`<text x="%d" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="16" fill="#7a6c59">%s</text><text x="%d" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="%d" font-weight="700" fill="#201a14">%s</text>`,
 		x,
 		y,
 		escape(label),
 		x,
 		y+28,
-		escape(value),
+		fontSize,
+		escape(truncateWithEllipsis(value, maxChars)),
 	)
 }
 
@@ -180,9 +191,12 @@ func renderFlowStrip(candles []marketstate.Candle, x int, y int, width int, heig
 		barY1 := y + 72
 		barY2 := y + 96
 
-		builder.WriteString(fmt.Sprintf(`<text x="%d" y="%d" text-anchor="end" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#4f8f67">Buy</text>`, midX-34, barY1+10))
+		// Labels sit directly above their bar, anchored to the bar's fixed
+		// edge, so a long bar (which grows away from that edge) can never
+		// grow underneath and cover the label.
+		builder.WriteString(fmt.Sprintf(`<text x="%d" y="%d" text-anchor="end" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#4f8f67">Buy</text>`, midX-30, barY1-4))
 		builder.WriteString(fmt.Sprintf(`<rect x="%d" y="%d" width="%d" height="14" rx="7" fill="#138a5b"/>`, midX-30-buyWidth, barY1, buyWidth))
-		builder.WriteString(fmt.Sprintf(`<text x="%d" y="%d" text-anchor="start" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#a25757">Sell</text>`, midX+34, barY2+10))
+		builder.WriteString(fmt.Sprintf(`<text x="%d" y="%d" text-anchor="start" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#a25757">Sell</text>`, midX+30, barY2-4))
 		builder.WriteString(fmt.Sprintf(`<rect x="%d" y="%d" width="%d" height="14" rx="7" fill="#b64242"/>`, midX+30, barY2, sellWidth))
 
 		activityHeight := 8 + int(activity*16)
