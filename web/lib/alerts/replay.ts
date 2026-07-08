@@ -61,6 +61,36 @@ type BybitRecentTradesResponse = {
   retMsg?: string;
 };
 
+export function getReplayBadgeLabel(preview: AlertReplayPreview): string {
+  if (preview.status === "unsupported" || preview.status === "unavailable") {
+    return "Replay unavailable";
+  }
+
+  if (preview.status === "insufficient") {
+    return "Replay: building sample";
+  }
+
+  const followThrough = preview.metrics.find((metric) => metric.label === "Follow-through");
+  if (followThrough) {
+    return `Replay: ${followThrough.value} follow-through`;
+  }
+
+  return "Replay: selective (no recent trigger)";
+}
+
+export function findReplayPreviewForRuleName(
+  rules: AlertRule[],
+  previews: Map<string, AlertReplayPreview>,
+  ruleName: string
+): AlertReplayPreview | undefined {
+  const matchingRule = rules.find((rule) => rule.name === ruleName);
+  if (!matchingRule) {
+    return undefined;
+  }
+
+  return previews.get(matchingRule.id);
+}
+
 export async function getAlertRuleReplayPreviews(rules: AlertRule[]) {
   const previews = new Map<string, AlertReplayPreview>();
   const symbolTrades = new Map<SupportedMarket, ReplayTrade[] | null>();

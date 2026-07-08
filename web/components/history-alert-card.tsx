@@ -9,6 +9,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getReplayBadgeLabel } from "@/lib/alerts/replay";
+import type { AlertReplayPreview } from "@/lib/alerts/replay";
 import {
   getDeliveryLabel,
   getProofImageSrc,
@@ -22,9 +24,10 @@ import { cn } from "@/lib/utils";
 
 type HistoryAlertCardProps = {
   item: AlertRecord;
+  replayPreview?: AlertReplayPreview;
 };
 
-export function HistoryAlertCard({ item }: HistoryAlertCardProps) {
+export function HistoryAlertCard({ item, replayPreview }: HistoryAlertCardProps) {
   const proofImageSrc = getProofImageSrc(item.proof);
 
   return (
@@ -36,6 +39,11 @@ export function HistoryAlertCard({ item }: HistoryAlertCardProps) {
           </Badge>
           <Badge variant="outline">{item.marketSymbol}</Badge>
           <Badge variant="outline">{item.timeframe}</Badge>
+          {replayPreview ? (
+            <Badge variant={replayPreview.status === "ready" ? "outline" : "secondary"}>
+              {getReplayBadgeLabel(replayPreview)}
+            </Badge>
+          ) : null}
         </div>
         <CardTitle className="text-xl">{summarizeProof(item)}</CardTitle>
         <CardDescription>{item.message}</CardDescription>
@@ -84,6 +92,13 @@ export function HistoryAlertCard({ item }: HistoryAlertCardProps) {
               <p className="mt-3 text-xs text-muted-foreground">
                 Signal range {getSignalRangeLabel(item.tradePlan)}
               </p>
+            </div>
+          ) : null}
+          {replayPreview && replayPreview.metrics.length ? (
+            <div className="rounded-xl border border-border bg-background p-4">
+              <p className="text-sm font-medium">Replay confidence</p>
+              <p className="mt-1 text-sm text-muted-foreground">{replayPreview.detail}</p>
+              <p className="mt-2 text-xs text-muted-foreground">{replayPreview.disclaimer}</p>
             </div>
           ) : null}
           <div className="rounded-xl border border-border bg-background p-4">

@@ -11,6 +11,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  findReplayPreviewForRuleName,
+  getAlertRuleReplayPreviews,
+  getReplayBadgeLabel,
+} from "@/lib/alerts/replay";
+import { getAlertRulesForCurrentUser } from "@/lib/alerts/rules";
+import {
   getDeliveryLabel,
   getProofImageSrc,
   getSideLabel,
@@ -46,6 +52,9 @@ export default async function HistoryDetailPage({
 
   const item = history.item;
   const proofImageSrc = getProofImageSrc(item.proof);
+  const rules = await getAlertRulesForCurrentUser();
+  const replayPreviews = await getAlertRuleReplayPreviews(rules);
+  const replayPreview = findReplayPreviewForRuleName(rules, replayPreviews, item.ruleName);
 
   return (
     <div className="flex flex-col gap-6">
@@ -69,6 +78,11 @@ export default async function HistoryDetailPage({
             </Badge>
             <Badge variant="outline">{item.marketSymbol}</Badge>
             <Badge variant="outline">{item.timeframe}</Badge>
+            {replayPreview ? (
+              <Badge variant={replayPreview.status === "ready" ? "outline" : "secondary"}>
+                {getReplayBadgeLabel(replayPreview)}
+              </Badge>
+            ) : null}
           </div>
           <CardTitle className="text-2xl">{summarizeProof(item)}</CardTitle>
           <CardDescription>{item.message}</CardDescription>
@@ -118,6 +132,24 @@ export default async function HistoryDetailPage({
                 <p className="mt-3 text-xs text-muted-foreground">
                   Signal range {getSignalRangeLabel(item.tradePlan)}
                 </p>
+              </div>
+            ) : null}
+            {replayPreview && replayPreview.metrics.length ? (
+              <div className="rounded-xl border border-border bg-background p-4">
+                <p className="text-sm font-medium">Replay confidence</p>
+                <p className="mt-1 text-sm text-muted-foreground">{replayPreview.detail}</p>
+                <p className="mt-2 text-xs text-muted-foreground">{replayPreview.disclaimer}</p>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {replayPreview.metrics.map((metric) => (
+                    <div
+                      key={metric.label}
+                      className="rounded-lg border border-border bg-[#f7f1e6] px-3 py-2"
+                    >
+                      <p className="text-xs text-muted-foreground">{metric.label}</p>
+                      <p className="text-sm font-semibold">{metric.value}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : null}
             <div className="rounded-xl border border-border bg-background p-4">

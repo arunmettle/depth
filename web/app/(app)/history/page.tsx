@@ -2,6 +2,11 @@ import { HistoryAlertCard } from "@/components/history-alert-card";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  findReplayPreviewForRuleName,
+  getAlertRuleReplayPreviews,
+} from "@/lib/alerts/replay";
+import { getAlertRulesForCurrentUser } from "@/lib/alerts/rules";
+import {
   getEngineDeliveryLabel,
   summarizeEngineDelivery,
 } from "@/lib/engine-status/presentation";
@@ -22,6 +27,8 @@ function getHistorySourceLabel(source: "engine" | "mock" | "supabase") {
 export default async function HistoryPage() {
   const engine = await getEngineRuntimeSummary();
   const history = await getHistorySource();
+  const rules = await getAlertRulesForCurrentUser();
+  const replayPreviews = await getAlertRuleReplayPreviews(rules);
 
   return (
     <div className="flex flex-col gap-6">
@@ -111,7 +118,11 @@ export default async function HistoryPage() {
       {history.items.length ? (
         <div className="grid gap-6">
           {history.items.map((item) => (
-            <HistoryAlertCard key={item.id} item={item} />
+            <HistoryAlertCard
+              key={item.id}
+              item={item}
+              replayPreview={findReplayPreviewForRuleName(rules, replayPreviews, item.ruleName)}
+            />
           ))}
         </div>
       ) : (
