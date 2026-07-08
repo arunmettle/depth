@@ -30,6 +30,8 @@ type PublicTradeStream struct {
 	evaluator       *evaluator.Evaluator
 	rules           []evaluator.Rule
 	alertStore      alertRecordStore
+	candleStore     candleRecordStore
+	candleWrites    chan marketstate.Candle
 	retryDelays     []time.Duration
 	sleep           func(context.Context, time.Duration) error
 	now             func() time.Time
@@ -42,6 +44,11 @@ type PublicTradeStream struct {
 type alertRecordStore interface {
 	IsConfigured() bool
 	Upsert(context.Context, alerts.Record) error
+}
+
+type candleRecordStore interface {
+	IsConfigured() bool
+	UpsertCandle(context.Context, marketstate.Candle) error
 }
 
 type alertPhotoSender interface {
@@ -157,17 +164,28 @@ type ValidationAlertInput struct {
 	UserID       string
 }
 
+// candleWriteBufferSize bounds the in-memory queue of closed candles
+// waiting to be persisted. Candles close infrequently (a handful per
+// minute across all symbols/timeframes), so this is generous headroom for
+// a slow or briefly-unavailable Supabase write, not a hot path.
+const candleWriteBufferSize = 64
+
 func NewPublicTradeStream(cfg config.Config, logger *slog.Logger) *PublicTradeStream {
 	marketState := marketstate.New()
 	rules := evaluator.LaunchRules(cfg.BybitSymbols)
+	// supabaseStore backs both alert history writes and the candle_history
+	// table used for outcome resolution - one store, two responsibilities.
+	supabaseStore := alertstore.NewSupabaseStore(cfg.SupabaseURL, cfg.SupabaseSecretKey)
 
-	return &PublicTradeStream{
+	stream := &PublicTradeStream{
 		cfg:             cfg,
 		logger:          logger,
 		marketState:     marketState,
 		evaluator:       evaluator.New(marketState),
 		rules:           rules,
-		alertStore:      alertstore.NewSupabaseStore(cfg.SupabaseURL, cfg.SupabaseSecretKey),
+		alertStore:      supabaseStore,
+		candleStore:     supabaseStore,
+		candleWrites:    make(chan marketstate.Candle, candleWriteBufferSize),
 		retryDelays:     []time.Duration{2 * time.Second, 5 * time.Second},
 		sleep:           sleepWithContext,
 		now:             time.Now,
@@ -183,9 +201,56 @@ func NewPublicTradeStream(cfg config.Config, logger *slog.Logger) *PublicTradeSt
 			},
 		},
 	}
+
+	marketState.SetOnCandleClose(stream.enqueueCandleWrite)
+
+	return stream
+}
+
+// enqueueCandleWrite is called synchronously by marketState the instant a
+// candle closes. It never blocks the hot trade-processing path: if the
+// write queue is full (persistence falling behind or Supabase down), the
+// candle is dropped rather than stalling trade processing, since a gap in
+// recorded history only narrows what outcome resolution can check later -
+// it never causes it to report a wrong result.
+func (s *PublicTradeStream) enqueueCandleWrite(candle marketstate.Candle) {
+	select {
+	case s.candleWrites <- candle:
+	default:
+		s.logger.Warn("dropped candle history write: queue full",
+			slog.String("symbol", candle.Symbol),
+			slog.String("timeframe", candle.Timeframe),
+		)
+	}
+}
+
+// persistCandleHistory drains candleWrites and persists each closed candle
+// to Supabase, so real-time price history is available for later outcome
+// resolution. Runs for the lifetime of the process.
+func (s *PublicTradeStream) persistCandleHistory(ctx context.Context) {
+	if !s.candleStore.IsConfigured() {
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case candle := <-s.candleWrites:
+			if err := s.candleStore.UpsertCandle(ctx, candle); err != nil {
+				s.logger.Warn("candle history persist failed",
+					slog.String("symbol", candle.Symbol),
+					slog.String("timeframe", candle.Timeframe),
+					slog.Any("error", err),
+				)
+			}
+		}
+	}
 }
 
 func (s *PublicTradeStream) Run(ctx context.Context) {
+	go s.persistCandleHistory(ctx)
+
 	backoff := time.Second
 
 	for {

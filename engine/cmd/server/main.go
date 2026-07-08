@@ -14,7 +14,6 @@ import (
 	"sentinelflow/engine/internal/bybit"
 	"sentinelflow/engine/internal/config"
 	"sentinelflow/engine/internal/evaluator"
-	"sentinelflow/engine/internal/klines"
 	"sentinelflow/engine/internal/outcome"
 	"sentinelflow/engine/internal/rulesource"
 )
@@ -38,7 +37,13 @@ func main() {
 
 	if cfg.HasSupabaseRuleSource() {
 		outcomeStore := alertstore.NewSupabaseStore(cfg.SupabaseURL, cfg.SupabaseSecretKey)
-		outcomeResolver := outcome.NewResolver(klines.NewClient(), outcomeStore, logger)
+		// outcomeStore doubles as the KlineFetcher: Bybit's REST kline API
+		// returns 403 for every request from Railway's egress IP (a
+		// datacenter/ASN-level block, confirmed across every published
+		// Bybit domain), so outcome resolution checks real price history
+		// against our own self-recorded candle_history table instead of
+		// calling Bybit's REST API directly.
+		outcomeResolver := outcome.NewResolver(outcomeStore, outcomeStore, logger)
 		go resolveOutcomes(rootCtx, logger, outcomeResolver, cfg.OutcomeResolveInterval)
 	} else {
 		logger.Info("skipping outcome resolution job: supabase is not configured")

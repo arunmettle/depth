@@ -63,11 +63,12 @@ type Candle struct {
 }
 
 type State struct {
-	mu           sync.RWMutex
-	candles      map[string]map[string]Candle
-	history      map[string]map[string][]Candle
-	historyLimit int
-	orderBooks   map[string]*orderBook
+	mu            sync.RWMutex
+	candles       map[string]map[string]Candle
+	history       map[string]map[string][]Candle
+	historyLimit  int
+	orderBooks    map[string]*orderBook
+	onCandleClose func(Candle)
 }
 
 func New() *State {
@@ -77,6 +78,19 @@ func New() *State {
 		historyLimit: 20,
 		orderBooks:   make(map[string]*orderBook),
 	}
+}
+
+// SetOnCandleClose registers a callback invoked with each candle exactly
+// once, the moment it closes (rolls into a new bucket). This lets callers
+// persist real, genuinely-observed candles elsewhere (e.g. for later
+// outcome resolution) without needing to poll RecentCandles. The callback
+// is invoked synchronously while UpdateTrade holds its internal lock, so
+// implementations must not block or call back into the State - enqueueing
+// onto a channel is the expected pattern.
+func (s *State) SetOnCandleClose(fn func(Candle)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onCandleClose = fn
 }
 
 func (s *State) UpdateTrade(trade Trade) {
@@ -198,6 +212,10 @@ func (s *State) appendHistory(symbol string, timeframe string, candle Candle) {
 	}
 
 	s.history[symbol][timeframe] = items
+
+	if s.onCandleClose != nil {
+		s.onCandleClose(candle)
+	}
 }
 
 func bucketStart(timestamp time.Time, window time.Duration) time.Time {

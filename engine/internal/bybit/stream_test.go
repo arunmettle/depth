@@ -145,6 +145,124 @@ func TestProcessEnvelopeNormalizesTradeState(t *testing.T) {
 	}
 }
 
+// fakeCandleStore records UpsertCandle calls for tests, standing in for
+// the Supabase-backed candle_history writer.
+type fakeCandleStore struct {
+	configured bool
+	upserted   []marketstate.Candle
+	err        error
+}
+
+func (f *fakeCandleStore) IsConfigured() bool { return f.configured }
+
+func (f *fakeCandleStore) UpsertCandle(_ context.Context, candle marketstate.Candle) error {
+	f.upserted = append(f.upserted, candle)
+	return f.err
+}
+
+func TestClosedCandlesAreEnqueuedForPersistence(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	stream := NewPublicTradeStream(config.Config{BybitSymbols: []string{"BTCUSDT"}}, logger)
+
+	first := time.Date(2026, 7, 5, 6, 7, 10, 0, time.UTC)
+	second := time.Date(2026, 7, 5, 6, 8, 2, 0, time.UTC)
+
+	tradeOne, err := json.Marshal(publicTrade{Price: "100", Side: "Buy", Size: "1", Symbol: "BTCUSDT", Timestamp: first.UnixMilli()})
+	if err != nil {
+		t.Fatalf("marshal trade: %v", err)
+	}
+	tradeTwo, err := json.Marshal(publicTrade{Price: "101", Side: "Sell", Size: "1", Symbol: "BTCUSDT", Timestamp: second.UnixMilli()})
+	if err != nil {
+		t.Fatalf("marshal trade: %v", err)
+	}
+
+	stream.processEnvelope(publicTradeEnvelope{Topic: "publicTrade.BTCUSDT", Data: []json.RawMessage{tradeOne}})
+	if len(stream.candleWrites) != 0 {
+		t.Fatalf("expected no queued candle writes before any bucket rollover, got %d", len(stream.candleWrites))
+	}
+
+	stream.processEnvelope(publicTradeEnvelope{Topic: "publicTrade.BTCUSDT", Data: []json.RawMessage{tradeTwo}})
+	if len(stream.candleWrites) != 1 {
+		t.Fatalf("expected exactly 1 queued candle write after the 1m bucket rolled over, got %d", len(stream.candleWrites))
+	}
+
+	closed := <-stream.candleWrites
+	if closed.Symbol != "BTCUSDT" || closed.Timeframe != "1m" || closed.Open != 100 {
+		t.Fatalf("unexpected closed candle queued: %+v", closed)
+	}
+}
+
+func TestEnqueueCandleWriteDropsRatherThanBlocksWhenQueueIsFull(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	stream := NewPublicTradeStream(config.Config{BybitSymbols: []string{"BTCUSDT"}}, logger)
+	stream.candleWrites = make(chan marketstate.Candle, 1)
+
+	stream.enqueueCandleWrite(marketstate.Candle{Symbol: "BTCUSDT", Timeframe: "1m"})
+	// Queue is now full; this call must return immediately rather than
+	// blocking the caller (which would stall live trade processing).
+	stream.enqueueCandleWrite(marketstate.Candle{Symbol: "BTCUSDT", Timeframe: "1m"})
+
+	if len(stream.candleWrites) != 1 {
+		t.Fatalf("expected queue to remain at capacity 1, got %d", len(stream.candleWrites))
+	}
+}
+
+func TestPersistCandleHistoryDrainsQueueUntilContextCancelled(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	stream := NewPublicTradeStream(config.Config{BybitSymbols: []string{"BTCUSDT"}}, logger)
+
+	store := &fakeCandleStore{configured: true}
+	stream.candleStore = store
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		stream.persistCandleHistory(ctx)
+		close(done)
+	}()
+
+	stream.candleWrites <- marketstate.Candle{Symbol: "BTCUSDT", Timeframe: "1m", Close: 100}
+
+	deadline := time.Now().Add(time.Second)
+	for len(store.upserted) == 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	if len(store.upserted) != 1 || store.upserted[0].Close != 100 {
+		t.Fatalf("expected persisted candle, got %+v", store.upserted)
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("expected persistCandleHistory to return after context cancel")
+	}
+}
+
+func TestPersistCandleHistorySkipsWhenStoreIsNotConfigured(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	stream := NewPublicTradeStream(config.Config{BybitSymbols: []string{"BTCUSDT"}}, logger)
+
+	store := &fakeCandleStore{configured: false}
+	stream.candleStore = store
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		stream.persistCandleHistory(ctx)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("expected persistCandleHistory to return immediately when store is unconfigured")
+	}
+}
+
 func TestStatusIncludesLaunchEvaluatorRules(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	stream := NewPublicTradeStream(config.Config{

@@ -11,6 +11,7 @@ import (
 
 	"sentinelflow/engine/internal/alerts"
 	"sentinelflow/engine/internal/evaluator"
+	"sentinelflow/engine/internal/marketstate"
 	"sentinelflow/engine/internal/outcome"
 	"sentinelflow/engine/internal/proof"
 )
@@ -200,3 +201,96 @@ func TestSupabaseStorePendingOutcomeAlertsRejectsUnconfiguredStore(t *testing.T)
 	}
 }
 
+func TestSupabaseStoreUpsertCandlePostsCandleHistoryRow(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/rest/v1/candle_history" {
+			t.Fatalf("unexpected request path: %s", request.URL.Path)
+		}
+
+		if request.URL.Query().Get("on_conflict") != "market_symbol,timeframe,bucket_start" {
+			t.Fatalf("unexpected on_conflict query: %s", request.URL.RawQuery)
+		}
+
+		if request.Header.Get("Prefer") != "resolution=merge-duplicates,return=minimal" {
+			t.Fatalf("unexpected Prefer header: %s", request.Header.Get("Prefer"))
+		}
+
+		var payload supabaseCandleRow
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode candle history payload: %v", err)
+		}
+
+		if payload.MarketSymbol != "BTCUSDT" || payload.Timeframe != "1m" {
+			t.Fatalf("unexpected payload identity: %+v", payload)
+		}
+		if payload.High != 101 || payload.Low != 99 {
+			t.Fatalf("unexpected payload high/low: %+v", payload)
+		}
+
+		writer.WriteHeader(http.StatusCreated)
+	}))
+	defer server.Close()
+
+	store := NewSupabaseStore(server.URL, "secret-123")
+
+	err := store.UpsertCandle(context.Background(), marketstate.Candle{
+		BucketStart: time.Date(2026, 1, 1, 0, 5, 0, 0, time.UTC),
+		Close:       100,
+		High:        101,
+		Low:         99,
+		Open:        100,
+		Symbol:      "BTCUSDT",
+		Timeframe:   "1m",
+	})
+	if err != nil {
+		t.Fatalf("upsert candle: %v", err)
+	}
+}
+
+func TestSupabaseStoreFetchKlinesQueriesCandleHistory(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/rest/v1/candle_history" {
+			t.Fatalf("unexpected request path: %s", request.URL.Path)
+		}
+
+		query := request.URL.Query()
+		if query.Get("market_symbol") != "eq.BTCUSDT" {
+			t.Fatalf("expected market_symbol filter, got %s", request.URL.RawQuery)
+		}
+		if query.Get("timeframe") != "eq.1m" {
+			t.Fatalf("expected timeframe filter, got %s", request.URL.RawQuery)
+		}
+		if len(query["bucket_start"]) != 2 {
+			t.Fatalf("expected two bucket_start bounds, got %v", query["bucket_start"])
+		}
+
+		body := []map[string]any{
+			{"bucket_start": "2026-01-01T00:05:00Z", "open": 100, "high": 101, "low": 99, "close": 100.5},
+		}
+		_ = json.NewEncoder(writer).Encode(body)
+	}))
+	defer server.Close()
+
+	store := NewSupabaseStore(server.URL, "secret-123")
+
+	got, err := store.FetchKlines(context.Background(), "BTCUSDT", 1, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("fetch klines: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("expected 1 kline, got %d", len(got))
+	}
+
+	if got[0].High != 101 || got[0].Low != 99 {
+		t.Fatalf("unexpected kline values: %+v", got[0])
+	}
+}
+
+func TestSupabaseStoreFetchKlinesRejectsUnsupportedInterval(t *testing.T) {
+	store := NewSupabaseStore("https://example.supabase.co", "secret-123")
+
+	if _, err := store.FetchKlines(context.Background(), "BTCUSDT", 3, time.Now().Add(-time.Hour), time.Now()); err == nil {
+		t.Fatal("expected error for unsupported interval")
+	}
+}

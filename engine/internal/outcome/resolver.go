@@ -175,10 +175,20 @@ func (r *Resolver) resolveOne(ctx context.Context, alert PendingAlert) (Result, 
 	}
 
 	if now.After(windowEnd) {
+		note := fmt.Sprintf("No stop-loss or take-profit level was reached within %s of the alert.", r.resolutionWindow)
+		if len(candles) == 0 {
+			// We fetched the complete resolution window and found zero
+			// recorded candles - this alert predates (or fell in a gap
+			// of) our own real-time candle recording, so we genuinely
+			// have no price history to check it against. Say so plainly
+			// rather than implying we checked and nothing was hit.
+			note = "No recorded Bybit price history was available to check this alert's outcome."
+		}
+
 		return Result{
 			AlertID: alert.ID,
 			Status:  StatusExpired,
-			Note:    fmt.Sprintf("No stop-loss or take-profit level was reached within %s of the alert.", r.resolutionWindow),
+			Note:    note,
 		}, nil
 	}
 

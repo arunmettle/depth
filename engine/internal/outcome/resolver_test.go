@@ -124,6 +124,32 @@ func TestResolvePendingMarksExpiredAfterWindowWithNoHit(t *testing.T) {
 	if len(store.updates) != 1 || store.updates[0].Status != StatusExpired {
 		t.Fatalf("expected expired outcome, got %+v", store.updates)
 	}
+
+	if store.updates[0].Note == "" || store.updates[0].Note == "No recorded Bybit price history was available to check this alert's outcome." {
+		t.Fatalf("expected a 'no level reached' note (candles were available), got %q", store.updates[0].Note)
+	}
+}
+
+func TestResolvePendingMarksExpiredWithHonestNoteWhenNoCandlesWereEverRecorded(t *testing.T) {
+	createdAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	fetcher := &fakeKlineFetcher{klines: nil}
+	store := &fakeAlertStore{pending: []PendingAlert{buyAlert(createdAt)}}
+
+	resolver := NewResolver(fetcher, store, nil)
+	resolver.now = func() time.Time { return createdAt.Add(49 * time.Hour) }
+
+	if err := resolver.ResolvePending(context.Background()); err != nil {
+		t.Fatalf("resolve pending: %v", err)
+	}
+
+	if len(store.updates) != 1 || store.updates[0].Status != StatusExpired {
+		t.Fatalf("expected expired outcome, got %+v", store.updates)
+	}
+
+	want := "No recorded Bybit price history was available to check this alert's outcome."
+	if store.updates[0].Note != want {
+		t.Fatalf("expected honest no-data note %q, got %q", want, store.updates[0].Note)
+	}
 }
 
 func TestResolvePendingLeavesAlertPendingWithinWindowAndNoHit(t *testing.T) {

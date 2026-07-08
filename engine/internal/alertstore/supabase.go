@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"sentinelflow/engine/internal/alerts"
+	"sentinelflow/engine/internal/klines"
+	"sentinelflow/engine/internal/marketstate"
 	"sentinelflow/engine/internal/outcome"
 )
 
@@ -247,6 +249,169 @@ func (s *SupabaseStore) UpdateOutcome(ctx context.Context, result outcome.Result
 	}
 
 	return nil
+}
+
+type supabaseCandleRow struct {
+	MarketSymbol string  `json:"market_symbol"`
+	Timeframe    string  `json:"timeframe"`
+	BucketStart  string  `json:"bucket_start"`
+	Open         float64 `json:"open"`
+	High         float64 `json:"high"`
+	Low          float64 `json:"low"`
+	Close        float64 `json:"close"`
+	BuyVolume    float64 `json:"buy_volume"`
+	SellVolume   float64 `json:"sell_volume"`
+	TotalVolume  float64 `json:"total_volume"`
+	Trades       int64   `json:"trades"`
+}
+
+// UpsertCandle persists one real, closed candle observed directly from the
+// live Bybit trade feed. Called once per candle close (never for the
+// in-progress current candle), so every row here is a genuinely finished,
+// fully-observed candle - never an estimate.
+func (s *SupabaseStore) UpsertCandle(ctx context.Context, candle marketstate.Candle) error {
+	if !s.IsConfigured() {
+		return fmt.Errorf("supabase alert store is not configured")
+	}
+
+	endpoint, err := url.Parse(s.url + "/rest/v1/candle_history")
+	if err != nil {
+		return fmt.Errorf("build supabase candle_history endpoint: %w", err)
+	}
+
+	query := endpoint.Query()
+	query.Set("on_conflict", "market_symbol,timeframe,bucket_start")
+	endpoint.RawQuery = query.Encode()
+
+	row := supabaseCandleRow{
+		MarketSymbol: candle.Symbol,
+		Timeframe:    candle.Timeframe,
+		BucketStart:  candle.BucketStart.UTC().Format(time.RFC3339),
+		Open:         candle.Open,
+		High:         candle.High,
+		Low:          candle.Low,
+		Close:        candle.Close,
+		BuyVolume:    candle.BuyVolume,
+		SellVolume:   candle.SellVolume,
+		TotalVolume:  candle.TotalVolume,
+		Trades:       candle.Trades,
+	}
+
+	payload, err := json.Marshal(row)
+	if err != nil {
+		return fmt.Errorf("encode candle history row: %w", err)
+	}
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("create candle history request: %w", err)
+	}
+
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("apikey", s.secretKey)
+	request.Header.Set("Authorization", "Bearer "+s.secretKey)
+	request.Header.Set("Prefer", "resolution=merge-duplicates,return=minimal")
+
+	response, err := s.httpClient.Do(request)
+	if err != nil {
+		return fmt.Errorf("request candle history upsert: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return fmt.Errorf("candle history upsert failed with status %d", response.StatusCode)
+	}
+
+	return nil
+}
+
+// FetchKlines satisfies outcome.KlineFetcher using our own recorded
+// candle_history table instead of Bybit's REST API, which is blocked
+// (HTTP 403) for every published Bybit domain from Railway's egress IP.
+// It only ever returns candles that were genuinely observed live via the
+// WebSocket feed - if none were recorded for the requested window (for
+// example, an alert created before this table existed), it returns an
+// empty slice rather than fabricating anything.
+func (s *SupabaseStore) FetchKlines(ctx context.Context, symbol string, intervalMinutes int, start time.Time, end time.Time) ([]klines.Kline, error) {
+	if !s.IsConfigured() {
+		return nil, fmt.Errorf("supabase alert store is not configured")
+	}
+
+	timeframe, ok := timeframeLabel(intervalMinutes)
+	if !ok {
+		return nil, fmt.Errorf("unsupported kline interval %d minutes", intervalMinutes)
+	}
+
+	endpoint, err := url.Parse(s.url + "/rest/v1/candle_history")
+	if err != nil {
+		return nil, fmt.Errorf("build supabase candle_history endpoint: %w", err)
+	}
+
+	query := endpoint.Query()
+	query.Set("select", "bucket_start,open,high,low,close")
+	query.Set("market_symbol", "eq."+symbol)
+	query.Set("timeframe", "eq."+timeframe)
+	query.Add("bucket_start", "gte."+start.UTC().Format(time.RFC3339))
+	query.Add("bucket_start", "lte."+end.UTC().Format(time.RFC3339))
+	query.Set("order", "bucket_start.asc")
+	query.Set("limit", "2000")
+	endpoint.RawQuery = query.Encode()
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("create candle history request: %w", err)
+	}
+
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("apikey", s.secretKey)
+	request.Header.Set("Authorization", "Bearer "+s.secretKey)
+
+	response, err := s.httpClient.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("request candle history: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return nil, fmt.Errorf("candle history request failed with status %d", response.StatusCode)
+	}
+
+	var rows []supabaseCandleRow
+	if err := json.NewDecoder(response.Body).Decode(&rows); err != nil {
+		return nil, fmt.Errorf("decode candle history: %w", err)
+	}
+
+	out := make([]klines.Kline, 0, len(rows))
+	for _, row := range rows {
+		bucketStart, err := time.Parse(time.RFC3339, row.BucketStart)
+		if err != nil {
+			continue
+		}
+
+		out = append(out, klines.Kline{
+			StartTime: bucketStart.UTC(),
+			Open:      row.Open,
+			High:      row.High,
+			Low:       row.Low,
+			Close:     row.Close,
+		})
+	}
+
+	return out, nil
+}
+
+func timeframeLabel(intervalMinutes int) (string, bool) {
+	switch intervalMinutes {
+	case 1:
+		return "1m", true
+	case 5:
+		return "5m", true
+	case 15:
+		return "15m", true
+	default:
+		return "", false
+	}
 }
 
 func mapAlertHistoryRow(record alerts.Record) supabaseAlertHistoryRow {

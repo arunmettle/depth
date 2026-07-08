@@ -178,6 +178,39 @@ func TestUpdateTradeArchivesPreviousCandleOnBucketRollover(t *testing.T) {
 	}
 }
 
+func TestSetOnCandleCloseFiresExactlyOncePerClosedCandle(t *testing.T) {
+	state := New()
+	first := time.Date(2026, 7, 5, 6, 7, 10, 0, time.UTC)
+	second := time.Date(2026, 7, 5, 6, 8, 2, 0, time.UTC)
+
+	var closed []Candle
+	state.SetOnCandleClose(func(candle Candle) {
+		closed = append(closed, candle)
+	})
+
+	state.UpdateTrade(Trade{Price: 104000, Side: "Buy", Size: 0.4, Symbol: "BTCUSDT", Timestamp: first})
+
+	if len(closed) != 0 {
+		t.Fatalf("expected no callback before any bucket rollover, got %d", len(closed))
+	}
+
+	state.UpdateTrade(Trade{Price: 104040, Side: "Sell", Size: 0.15, Symbol: "BTCUSDT", Timestamp: second})
+
+	// Three supported timeframes (1m, 5m, 15m); only the 1m bucket rolled
+	// over between these two timestamps, so exactly one close should fire.
+	if len(closed) != 1 {
+		t.Fatalf("expected exactly 1 closed candle callback, got %d", len(closed))
+	}
+
+	if closed[0].Timeframe != "1m" || !closed[0].BucketStart.Equal(time.Date(2026, 7, 5, 6, 7, 0, 0, time.UTC)) {
+		t.Fatalf("unexpected closed candle: %+v", closed[0])
+	}
+
+	if closed[0].Open != 104000 || closed[0].Close != 104000 {
+		t.Fatalf("expected the fully-formed closed candle's prices, got %+v", closed[0])
+	}
+}
+
 func TestRecentCandlesKeepsOnlyTheMostRecentHistoryWindow(t *testing.T) {
 	state := New()
 	start := time.Date(2026, 7, 5, 6, 0, 0, 0, time.UTC)
@@ -253,7 +286,7 @@ func TestApplyOrderBookDeltaUpdatesAndRemovesLevels(t *testing.T) {
 	})
 
 	state.ApplyOrderBookDelta("BTCUSDT", []OrderBookLevel{
-		{Price: 104000, Size: 0}, // removed
+		{Price: 104000, Size: 0},   // removed
 		{Price: 103980, Size: 2.0}, // new level
 	}, []OrderBookLevel{
 		{Price: 104010, Size: 4.5}, // updated size
