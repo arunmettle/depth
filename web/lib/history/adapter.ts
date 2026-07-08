@@ -10,6 +10,7 @@ export function fromEngineRecentAlert(record: EngineRecentAlertRecord): AlertRec
     id: record.id,
     marketSymbol: record.marketSymbol,
     message: record.message,
+    outcome: record.outcome,
     proof: {
       content: record.proof.content,
       contentHash: record.proof.contentHash,

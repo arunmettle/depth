@@ -24,12 +24,29 @@ export type AlertDeliveryStatus =
   | "queued"
   | "retrying";
 
+export type OutcomeStatus =
+  | "pending"
+  | "tp1_hit"
+  | "tp2_hit"
+  | "stop_hit"
+  | "expired";
+
+export type AlertOutcome = {
+  status: OutcomeStatus;
+  hitPrice?: number;
+  hitAt?: string;
+  rMultiple?: number;
+  checkedAt?: string;
+  note?: string;
+};
+
 export type AlertRecord = {
   createdAt: string;
   deliveryStatus: AlertDeliveryStatus;
   id: string;
   marketSymbol: "BTCUSDT" | "ETHUSDT";
   message: string;
+  outcome?: AlertOutcome;
   proof: ProofArtifact;
   ruleName: string;
   side: "buy" | "sell";

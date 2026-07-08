@@ -20,6 +20,13 @@ export const mockHistoryItems: AlertRecord[] = [
     ruleName: "BTC 1m stacked imbalance",
     side: "buy",
     timeframe: "1m",
+    outcome: {
+      status: "tp1_hit",
+      hitPrice: 64380.75,
+      hitAt: "2026-07-05T06:41:00Z",
+      rMultiple: 1,
+      checkedAt: "2026-07-05T06:45:00Z",
+    },
     tradePlan: {
       entryPrice: 64250.5,
       riskReward1: 1,
@@ -52,6 +59,9 @@ export const mockHistoryItems: AlertRecord[] = [
     ruleName: "ETH 5m stacked imbalance",
     side: "sell",
     timeframe: "5m",
+    outcome: {
+      status: "pending",
+    },
     tradePlan: {
       entryPrice: 3420.15,
       riskReward1: 1,

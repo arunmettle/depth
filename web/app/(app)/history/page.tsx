@@ -1,4 +1,5 @@
 import { HistoryAlertCard } from "@/components/history-alert-card";
+import { TrackRecordCard } from "@/components/track-record-card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -165,6 +166,7 @@ export default async function HistoryPage() {
 
       {history.items.length ? (
         <div className="grid gap-6">
+          <TrackRecordCard items={history.items} />
           {history.items.map((item) => (
             <HistoryAlertCard
               key={item.id}

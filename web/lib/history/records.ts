@@ -1,9 +1,9 @@
-import type { AlertRecord } from "@/lib/history/schema";
+import type { AlertRecord, OutcomeStatus } from "@/lib/history/schema";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
 const SELECT_COLUMNS =
-  "created_at,delivery_status,id,market_symbol,message,proof_content,proof_content_hash,proof_height,proof_media_type,proof_width,rule_name,side,timeframe,user_id,trade_plan_entry_price,trade_plan_stop_loss,trade_plan_take_profit_1,trade_plan_take_profit_2,trade_plan_signal_low,trade_plan_signal_high,trade_plan_trigger_price,trade_plan_risk_reward_1,trade_plan_risk_reward_2";
+  "created_at,delivery_status,id,market_symbol,message,proof_content,proof_content_hash,proof_height,proof_media_type,proof_width,rule_name,side,timeframe,user_id,trade_plan_entry_price,trade_plan_stop_loss,trade_plan_take_profit_1,trade_plan_take_profit_2,trade_plan_signal_low,trade_plan_signal_high,trade_plan_trigger_price,trade_plan_risk_reward_1,trade_plan_risk_reward_2,outcome_status,outcome_hit_price,outcome_hit_at,outcome_r_multiple,outcome_checked_at,outcome_note";
 
 type AlertHistoryRow = {
   created_at: string;
@@ -11,6 +11,12 @@ type AlertHistoryRow = {
   id: string;
   market_symbol: AlertRecord["marketSymbol"];
   message: string;
+  outcome_checked_at: string | null;
+  outcome_hit_at: string | null;
+  outcome_hit_price: number | null;
+  outcome_note: string | null;
+  outcome_r_multiple: number | null;
+  outcome_status: OutcomeStatus | null;
   proof_content: string;
   proof_content_hash: string;
   proof_height: number;
@@ -49,6 +55,21 @@ function mapTradePlan(row: AlertHistoryRow): AlertRecord["tradePlan"] {
   };
 }
 
+function mapOutcome(row: AlertHistoryRow): AlertRecord["outcome"] {
+  if (!row.outcome_status) {
+    return undefined;
+  }
+
+  return {
+    status: row.outcome_status,
+    hitPrice: row.outcome_hit_price ?? undefined,
+    hitAt: row.outcome_hit_at ?? undefined,
+    rMultiple: row.outcome_r_multiple ?? undefined,
+    checkedAt: row.outcome_checked_at ?? undefined,
+    note: row.outcome_note ?? undefined,
+  };
+}
+
 function mapAlertHistoryRow(row: AlertHistoryRow): AlertRecord {
   return {
     createdAt: row.created_at,
@@ -56,6 +77,7 @@ function mapAlertHistoryRow(row: AlertHistoryRow): AlertRecord {
     id: row.id,
     marketSymbol: row.market_symbol,
     message: row.message,
+    outcome: mapOutcome(row),
     proof: {
       content: row.proof_content,
       contentHash: row.proof_content_hash,

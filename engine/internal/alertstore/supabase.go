@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"sentinelflow/engine/internal/alerts"
+	"sentinelflow/engine/internal/outcome"
 )
 
 type SupabaseStore struct {
@@ -96,6 +98,152 @@ func (s *SupabaseStore) Upsert(ctx context.Context, record alerts.Record) error 
 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return fmt.Errorf("alert history upsert failed with status %d", response.StatusCode)
+	}
+
+	return nil
+}
+
+type supabasePendingOutcomeRow struct {
+	ID                   string  `json:"id"`
+	MarketSymbol         string  `json:"market_symbol"`
+	Side                 string  `json:"side"`
+	Timeframe            string  `json:"timeframe"`
+	CreatedAt            string  `json:"created_at"`
+	TradePlanEntryPrice  float64 `json:"trade_plan_entry_price"`
+	TradePlanStopLoss    float64 `json:"trade_plan_stop_loss"`
+	TradePlanTakeProfit1 float64 `json:"trade_plan_take_profit_1"`
+	TradePlanTakeProfit2 float64 `json:"trade_plan_take_profit_2"`
+}
+
+// PendingOutcomeAlerts returns delivered alerts that are still waiting for
+// a real tracked outcome (outcome_status = 'pending'), oldest first, that
+// are at least minAge old so at least one candle has had a chance to close.
+func (s *SupabaseStore) PendingOutcomeAlerts(ctx context.Context, minAge time.Duration, limit int) ([]outcome.PendingAlert, error) {
+	if !s.IsConfigured() {
+		return nil, fmt.Errorf("supabase alert store is not configured")
+	}
+
+	endpoint, err := url.Parse(s.url + "/rest/v1/alert_history")
+	if err != nil {
+		return nil, fmt.Errorf("build supabase alert_history endpoint: %w", err)
+	}
+
+	cutoff := time.Now().UTC().Add(-minAge)
+
+	query := endpoint.Query()
+	query.Set("select", "id,market_symbol,side,timeframe,created_at,trade_plan_entry_price,trade_plan_stop_loss,trade_plan_take_profit_1,trade_plan_take_profit_2")
+	query.Set("outcome_status", "eq.pending")
+	query.Set("created_at", "lte."+cutoff.Format(time.RFC3339))
+	query.Set("order", "created_at.asc")
+	query.Set("limit", strconv.Itoa(limit))
+	endpoint.RawQuery = query.Encode()
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("create pending outcome request: %w", err)
+	}
+
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("apikey", s.secretKey)
+	request.Header.Set("Authorization", "Bearer "+s.secretKey)
+
+	response, err := s.httpClient.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("request pending outcome alerts: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return nil, fmt.Errorf("pending outcome alerts request failed with status %d", response.StatusCode)
+	}
+
+	var rows []supabasePendingOutcomeRow
+	if err := json.NewDecoder(response.Body).Decode(&rows); err != nil {
+		return nil, fmt.Errorf("decode pending outcome alerts: %w", err)
+	}
+
+	alertsPending := make([]outcome.PendingAlert, 0, len(rows))
+	for _, row := range rows {
+		createdAt, err := time.Parse(time.RFC3339, row.CreatedAt)
+		if err != nil {
+			continue
+		}
+
+		alertsPending = append(alertsPending, outcome.PendingAlert{
+			ID:           row.ID,
+			MarketSymbol: row.MarketSymbol,
+			Side:         row.Side,
+			Timeframe:    row.Timeframe,
+			CreatedAt:    createdAt.UTC(),
+			EntryPrice:   row.TradePlanEntryPrice,
+			StopLoss:     row.TradePlanStopLoss,
+			TakeProfit1:  row.TradePlanTakeProfit1,
+			TakeProfit2:  row.TradePlanTakeProfit2,
+		})
+	}
+
+	return alertsPending, nil
+}
+
+// UpdateOutcome persists a resolved (or expired) real outcome for one
+// alert.
+func (s *SupabaseStore) UpdateOutcome(ctx context.Context, result outcome.Result) error {
+	if !s.IsConfigured() {
+		return fmt.Errorf("supabase alert store is not configured")
+	}
+
+	if result.AlertID == "" {
+		return fmt.Errorf("outcome result is missing an alert id")
+	}
+
+	endpoint, err := url.Parse(s.url + "/rest/v1/alert_history")
+	if err != nil {
+		return fmt.Errorf("build supabase alert_history endpoint: %w", err)
+	}
+
+	query := endpoint.Query()
+	query.Set("id", "eq."+result.AlertID)
+	endpoint.RawQuery = query.Encode()
+
+	payload := map[string]any{
+		"outcome_status":     string(result.Status),
+		"outcome_checked_at": time.Now().UTC().Format(time.RFC3339),
+	}
+
+	if result.Status == outcome.StatusTP1Hit || result.Status == outcome.StatusTP2Hit || result.Status == outcome.StatusStopHit {
+		payload["outcome_hit_price"] = result.HitPrice
+		payload["outcome_hit_at"] = result.HitAt.UTC().Format(time.RFC3339)
+		payload["outcome_r_multiple"] = result.RMultiple
+	}
+
+	if result.Note != "" {
+		payload["outcome_note"] = result.Note
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("encode outcome update: %w", err)
+	}
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodPatch, endpoint.String(), bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create outcome update request: %w", err)
+	}
+
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("apikey", s.secretKey)
+	request.Header.Set("Authorization", "Bearer "+s.secretKey)
+	request.Header.Set("Prefer", "return=minimal")
+
+	response, err := s.httpClient.Do(request)
+	if err != nil {
+		return fmt.Errorf("request outcome update: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return fmt.Errorf("outcome update failed with status %d", response.StatusCode)
 	}
 
 	return nil

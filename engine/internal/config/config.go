@@ -9,46 +9,49 @@ import (
 )
 
 const (
-	defaultBybitWebSocketURL = "wss://stream.bybit.com/v5/public/linear"
-	defaultEnvironment       = "development"
-	defaultHost              = "127.0.0.1"
-	defaultLogLevel          = "info"
-	defaultPort              = 8080
-	defaultPingInterval      = 20 * time.Second
-	defaultRuleSyncInterval  = time.Minute
+	defaultBybitWebSocketURL      = "wss://stream.bybit.com/v5/public/linear"
+	defaultEnvironment            = "development"
+	defaultHost                   = "127.0.0.1"
+	defaultLogLevel               = "info"
+	defaultPort                   = 8080
+	defaultPingInterval           = 20 * time.Second
+	defaultRuleSyncInterval       = time.Minute
+	defaultOutcomeResolveInterval = 5 * time.Minute
 )
 
 type Config struct {
-	BybitWebSocketURL string
-	Environment       string
-	Host              string
-	BybitSymbols      []string
-	LogLevel          slog.Level
-	PingInterval      time.Duration
-	Port              int
-	RuleSyncInterval  time.Duration
-	SupabaseSecretKey string
-	SupabaseURL       string
-	TelegramBotToken  string
-	TelegramBaseURL   string
-	ValidationAPIKey  string
+	BybitWebSocketURL      string
+	Environment            string
+	Host                   string
+	BybitSymbols           []string
+	LogLevel               slog.Level
+	OutcomeResolveInterval time.Duration
+	PingInterval           time.Duration
+	Port                   int
+	RuleSyncInterval       time.Duration
+	SupabaseSecretKey      string
+	SupabaseURL            string
+	TelegramBotToken       string
+	TelegramBaseURL        string
+	ValidationAPIKey       string
 }
 
 func Load() Config {
 	return Config{
-		BybitWebSocketURL: getEnv("BYBIT_WS_URL", defaultBybitWebSocketURL),
-		BybitSymbols:      getEnvCSV("BYBIT_SYMBOLS", []string{"BTCUSDT", "ETHUSDT"}),
-		Environment:       getEnv("APP_ENV", defaultEnvironment),
-		Host:              getEnv("HOST", defaultHost),
-		LogLevel:          parseLogLevel(getEnv("LOG_LEVEL", defaultLogLevel)),
-		PingInterval:      getEnvDuration("PING_INTERVAL", defaultPingInterval),
-		Port:              getEnvInt("PORT", defaultPort),
-		RuleSyncInterval:  getEnvDuration("RULE_SYNC_INTERVAL", defaultRuleSyncInterval),
-		SupabaseSecretKey: getEnvAny([]string{"SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY"}, ""),
-		SupabaseURL:       getEnvAny([]string{"SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"}, ""),
-		TelegramBotToken:  getEnv("TELEGRAM_BOT_TOKEN", ""),
-		TelegramBaseURL:   getEnv("TELEGRAM_BASE_URL", "https://api.telegram.org"),
-		ValidationAPIKey:  getEnv("VALIDATION_API_KEY", ""),
+		BybitWebSocketURL:      getEnv("BYBIT_WS_URL", defaultBybitWebSocketURL),
+		BybitSymbols:           getEnvCSV("BYBIT_SYMBOLS", []string{"BTCUSDT", "ETHUSDT"}),
+		Environment:            getEnv("APP_ENV", defaultEnvironment),
+		Host:                   getEnv("HOST", defaultHost),
+		LogLevel:               parseLogLevel(getEnv("LOG_LEVEL", defaultLogLevel)),
+		OutcomeResolveInterval: getEnvDuration("OUTCOME_RESOLVE_INTERVAL", defaultOutcomeResolveInterval),
+		PingInterval:           getEnvDuration("PING_INTERVAL", defaultPingInterval),
+		Port:                   getEnvInt("PORT", defaultPort),
+		RuleSyncInterval:       getEnvDuration("RULE_SYNC_INTERVAL", defaultRuleSyncInterval),
+		SupabaseSecretKey:      getEnvAny([]string{"SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY"}, ""),
+		SupabaseURL:            getEnvAny([]string{"SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"}, ""),
+		TelegramBotToken:       getEnv("TELEGRAM_BOT_TOKEN", ""),
+		TelegramBaseURL:        getEnv("TELEGRAM_BASE_URL", "https://api.telegram.org"),
+		ValidationAPIKey:       getEnv("VALIDATION_API_KEY", ""),
 	}
 }
 

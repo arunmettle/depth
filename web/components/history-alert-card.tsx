@@ -13,6 +13,9 @@ import { getReplayBadgeLabel } from "@/lib/alerts/replay";
 import type { AlertReplayPreview } from "@/lib/alerts/replay";
 import {
   getDeliveryLabel,
+  getOutcomeBadgeLabel,
+  getOutcomeBadgeVariant,
+  getOutcomeDetail,
   getProofImageSrc,
   getSideLabel,
   getSignalRangeLabel,
@@ -42,6 +45,11 @@ export function HistoryAlertCard({ item, replayPreview }: HistoryAlertCardProps)
           {replayPreview ? (
             <Badge variant={replayPreview.status === "ready" ? "outline" : "secondary"}>
               {getReplayBadgeLabel(replayPreview)}
+            </Badge>
+          ) : null}
+          {item.tradePlan ? (
+            <Badge variant={getOutcomeBadgeVariant(item.outcome)}>
+              {getOutcomeBadgeLabel(item.outcome)}
             </Badge>
           ) : null}
         </div>
@@ -92,6 +100,12 @@ export function HistoryAlertCard({ item, replayPreview }: HistoryAlertCardProps)
               <p className="mt-3 text-xs text-muted-foreground">
                 Signal range {getSignalRangeLabel(item.tradePlan)}
               </p>
+            </div>
+          ) : null}
+          {item.tradePlan ? (
+            <div className="rounded-xl border border-border bg-background p-4">
+              <p className="text-sm font-medium">Real outcome</p>
+              <p className="mt-1 text-sm text-muted-foreground">{getOutcomeDetail(item.outcome)}</p>
             </div>
           ) : null}
           {replayPreview && replayPreview.metrics.length ? (

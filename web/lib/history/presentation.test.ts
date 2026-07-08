@@ -2,13 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   getDeliveryLabel,
+  getOutcomeBadgeLabel,
+  getOutcomeBadgeVariant,
+  getOutcomeDetail,
   getProofImageSrc,
   getSideLabel,
   getSignalRangeLabel,
   getTradePlanTiles,
   summarizeProof,
 } from "@/lib/history/presentation";
-import type { AlertRecord } from "@/lib/history/schema";
+import type { AlertOutcome, AlertRecord } from "@/lib/history/schema";
 
 const historyItem: AlertRecord = {
   createdAt: "2026-07-05T06:02:00Z",
@@ -106,5 +109,43 @@ describe("history presentation", () => {
       })
     ).toBe("64180.00 to 64310.00");
     expect(getSignalRangeLabel(undefined)).toBe("N/A");
+  });
+
+  it("labels outcome badges for each real tracked status", () => {
+    const tp1: AlertOutcome = { status: "tp1_hit", rMultiple: 1.5 };
+    const tp2: AlertOutcome = { status: "tp2_hit", rMultiple: 2 };
+    const stop: AlertOutcome = { status: "stop_hit", rMultiple: -1 };
+    const expired: AlertOutcome = { status: "expired" };
+    const pending: AlertOutcome = { status: "pending" };
+
+    expect(getOutcomeBadgeLabel(tp1)).toBe("TP1 hit +1.50R");
+    expect(getOutcomeBadgeLabel(tp2)).toBe("TP2 hit +2.00R");
+    expect(getOutcomeBadgeLabel(stop)).toBe("Stopped out -1.00R");
+    expect(getOutcomeBadgeLabel(expired)).toBe("No clear outcome");
+    expect(getOutcomeBadgeLabel(pending)).toBe("Outcome: tracking");
+    expect(getOutcomeBadgeLabel(undefined)).toBe("Outcome: tracking");
+  });
+
+  it("maps outcome statuses to badge variants", () => {
+    expect(getOutcomeBadgeVariant({ status: "tp1_hit" })).toBe("default");
+    expect(getOutcomeBadgeVariant({ status: "tp2_hit" })).toBe("default");
+    expect(getOutcomeBadgeVariant({ status: "stop_hit" })).toBe("destructive");
+    expect(getOutcomeBadgeVariant({ status: "expired" })).toBe("outline");
+    expect(getOutcomeBadgeVariant({ status: "pending" })).toBe("secondary");
+    expect(getOutcomeBadgeVariant(undefined)).toBe("secondary");
+  });
+
+  it("describes real tracked outcomes in detail text", () => {
+    expect(getOutcomeDetail({ status: "tp1_hit", hitPrice: 64380.75 })).toContain(
+      "64380.75"
+    );
+    expect(getOutcomeDetail({ status: "stop_hit", hitPrice: 64120.25 })).toContain(
+      "stop-loss was actually reached"
+    );
+    expect(
+      getOutcomeDetail({ status: "expired", note: "No level touched in 48h." })
+    ).toBe("No level touched in 48h.");
+    expect(getOutcomeDetail({ status: "pending" })).toContain("Still tracking");
+    expect(getOutcomeDetail(undefined)).toContain("Still tracking");
   });
 });

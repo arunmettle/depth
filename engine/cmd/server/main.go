@@ -9,10 +9,13 @@ import (
 	"syscall"
 	"time"
 
+	"sentinelflow/engine/internal/alertstore"
 	"sentinelflow/engine/internal/app"
 	"sentinelflow/engine/internal/bybit"
 	"sentinelflow/engine/internal/config"
 	"sentinelflow/engine/internal/evaluator"
+	"sentinelflow/engine/internal/klines"
+	"sentinelflow/engine/internal/outcome"
 	"sentinelflow/engine/internal/rulesource"
 )
 
@@ -32,6 +35,14 @@ func main() {
 	ruleSource := createRuleSource(cfg)
 	go syncRules(rootCtx, logger, tradeStream, ruleSource, cfg.RuleSyncInterval)
 	go tradeStream.Run(rootCtx)
+
+	if cfg.HasSupabaseRuleSource() {
+		outcomeStore := alertstore.NewSupabaseStore(cfg.SupabaseURL, cfg.SupabaseSecretKey)
+		outcomeResolver := outcome.NewResolver(klines.NewClient(), outcomeStore, logger)
+		go resolveOutcomes(rootCtx, logger, outcomeResolver, cfg.OutcomeResolveInterval)
+	} else {
+		logger.Info("skipping outcome resolution job: supabase is not configured")
+	}
 
 	application := app.New(cfg, logger, tradeStream)
 
@@ -111,6 +122,33 @@ func syncRules(
 			return
 		case <-ticker.C:
 			load()
+		}
+	}
+}
+
+func resolveOutcomes(
+	ctx context.Context,
+	logger *slog.Logger,
+	resolver *outcome.Resolver,
+	interval time.Duration,
+) {
+	resolve := func() {
+		if err := resolver.ResolvePending(ctx); err != nil {
+			logger.Warn("outcome resolution pass failed", slog.Any("error", err))
+		}
+	}
+
+	resolve()
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			resolve()
 		}
 	}
 }

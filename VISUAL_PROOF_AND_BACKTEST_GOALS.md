@@ -262,6 +262,36 @@ free and public — see VP2.5 above), but still a real lift: it requires
 persisting book snapshots over time (not just at alert moments) and
 rendering a colored liquidity surface, not a single-moment ladder.
 
+## Goal VP5: Real Outcome Tracking (Done)
+
+This directly answers "if I had taken this alert, would it have made money?"
+without fabricating anything.
+
+What it does:
+
+- after an alert fires, the engine fetches real Bybit historical klines
+  (`engine/internal/klines`) covering the time since the alert
+- `engine/internal/outcome` walks those real candles chronologically and
+  checks whether the trade plan's stop-loss, TP1, or TP2 was actually
+  touched first
+- if a single candle's high/low breaches both the stop and a take-profit
+  level, the stop always wins — we never assume the better outcome when the
+  true intra-candle order is unknowable
+- unresolved alerts expire after 48h with an explanatory note rather than
+  being silently dropped or counted as a win/loss
+- results (`outcome_status`, `outcome_hit_price`, `outcome_r_multiple`, etc.)
+  are persisted on `alert_history` via a background resolver job
+  (`OUTCOME_RESOLVE_INTERVAL`, default 5m)
+- the web history page now shows, per alert, a real outcome badge
+  ("TP1 hit +1.5R", "Stopped out -1.0R", "Outcome: tracking", "No clear
+  outcome") plus a "Track record" card aggregating win rate, average
+  R-multiple, and a cumulative-R sparkline across all resolved alerts
+- everything is computed from real Bybit price history — no simulated or
+  estimated fills
+
+This does not replace a full historical backtest engine (see VP3) — it only
+tells you what really happened to alerts that were actually sent.
+
 ## Decision Notes
 
 - No fake heatmap visuals
