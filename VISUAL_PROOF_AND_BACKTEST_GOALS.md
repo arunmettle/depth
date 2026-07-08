@@ -166,6 +166,10 @@ The web history surface now mirrors that same trade-plan framing explicitly:
 This closes the last visible gap in VP1: Telegram and web history now present
 the same setup, invalidation, and target framing.
 
+The remaining VP1 should-include item — "replay confidence badge when
+available" — is now also live; see the VP2 status update below, since the
+badge is powered by the VP2 replay evidence.
+
 ## Follow-up Goal
 
 ### Goal VP2: Backtest Showcase v1
@@ -185,6 +189,29 @@ Success criteria:
 - users can inspect whether a rule is selective or noisy
 - users can judge whether the alert has enough recent evidence to be trusted
 - the product communicates confidence without pretending to guarantee profitability
+
+### Goal VP2 Status Update
+
+Replay confidence (signal count, follow-through rate, average move, sample
+window, disclaimers) was already computed and shown on the Alerts page. That
+evidence is now also surfaced on the history surface, where a trader actually
+reviews delivered signals:
+
+- `web/lib/alerts/replay.ts` gained `findReplayPreviewForRuleName()` to match
+  a persisted history record back to its originating alert rule by name, and
+  `getReplayBadgeLabel()` to render a compact one-line badge
+- both the history list page and the history detail page now show a replay
+  confidence badge (e.g. "Replay: 62% follow-through", "Replay: building
+  sample", "Replay: selective (no recent trigger)", or "Replay unavailable")
+  next to each proof card
+- the history detail page also renders the fuller replay metrics tiles and
+  disclaimer when a preview with signals exists, matching the framing already
+  used on the Alerts page
+
+This is still the narrow recent-replay confidence view, not a real historical
+backtest — that honest limitation is unchanged. What's new is that the same
+evidence trail is now visible everywhere a user reviews a signal (Alerts,
+history list, history detail), not just on the Alerts page.
 
 ## Later Goal
 
