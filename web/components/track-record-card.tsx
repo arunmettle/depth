@@ -1,15 +1,11 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getRuleTypeLabel } from "@/lib/history/presentation";
 import { summarizeTrackRecord, summarizeTrackRecordByRuleType } from "@/lib/history/track-record";
 import type { AlertRecord } from "@/lib/history/schema";
 
 type TrackRecordCardProps = {
   items: AlertRecord[];
-};
-
-const RULE_TYPE_LABELS: Record<AlertRecord["ruleType"], string> = {
-  stacked_imbalance: "Stacked imbalance",
-  trapped_traders: "Trapped traders",
 };
 
 function formatSignedR(value: number) {
@@ -118,7 +114,7 @@ export function TrackRecordCard({ items }: TrackRecordCardProps) {
           {byRuleType.map(({ ruleType, summary: ruleSummary }) => (
             <div key={ruleType} className="rounded-xl border border-border bg-background p-4">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium">{RULE_TYPE_LABELS[ruleType]}</p>
+                <p className="text-sm font-medium">{getRuleTypeLabel(ruleType)}</p>
                 <Badge variant={ruleSummary.resolvedCount > 0 ? "default" : "secondary"}>
                   {ruleSummary.resolvedCount} resolved
                 </Badge>

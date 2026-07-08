@@ -25,6 +25,10 @@ export function getSideLabel(side: AlertRecord["side"]) {
   return side === "buy" ? "Buy imbalance" : "Sell imbalance";
 }
 
+export function getRuleTypeLabel(ruleType: AlertRecord["ruleType"]) {
+  return ruleType === "trapped_traders" ? "Trapped traders" : "Stacked imbalance";
+}
+
 export function summarizeProof(item: AlertRecord) {
   return `${item.marketSymbol} ${item.timeframe} ${getSideLabel(item.side)}`;
 }

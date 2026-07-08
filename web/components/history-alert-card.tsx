@@ -17,6 +17,7 @@ import {
   getOutcomeBadgeVariant,
   getOutcomeDetail,
   getProofImageSrc,
+  getRuleTypeLabel,
   getSideLabel,
   getSignalRangeLabel,
   getTradePlanTiles,
@@ -42,6 +43,7 @@ export function HistoryAlertCard({ item, replayPreview }: HistoryAlertCardProps)
           </Badge>
           <Badge variant="outline">{item.marketSymbol}</Badge>
           <Badge variant="outline">{item.timeframe}</Badge>
+          <Badge variant="secondary">{getRuleTypeLabel(item.ruleType)}</Badge>
           {replayPreview ? (
             <Badge variant={replayPreview.status === "ready" ? "outline" : "secondary"}>
               {getReplayBadgeLabel(replayPreview)}

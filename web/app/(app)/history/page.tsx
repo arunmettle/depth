@@ -1,4 +1,4 @@
-import { HistoryAlertCard } from "@/components/history-alert-card";
+import { HistoryRuleFilter } from "@/components/history-rule-filter";
 import { TrackRecordCard } from "@/components/track-record-card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -12,10 +12,7 @@ import { getHistorySource } from "@/lib/history/source";
 import { getProductPathState } from "@/lib/product-path";
 import { getAuthState } from "@/lib/supabase/server";
 import { getTelegramConnectionForCurrentUser } from "@/lib/telegram/connections";
-import {
-  findReplayPreviewForRuleName,
-  getAlertRuleReplayPreviews,
-} from "@/lib/alerts/replay";
+import { getAlertRuleReplayPreviews } from "@/lib/alerts/replay";
 import { getAlertRulesForCurrentUser } from "@/lib/alerts/rules";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -167,13 +164,7 @@ export default async function HistoryPage() {
       {history.items.length ? (
         <div className="grid gap-6">
           <TrackRecordCard items={history.items} />
-          {history.items.map((item) => (
-            <HistoryAlertCard
-              key={item.id}
-              item={item}
-              replayPreview={findReplayPreviewForRuleName(rules, replayPreviews, item.ruleName)}
-            />
-          ))}
+          <HistoryRuleFilter items={history.items} rules={rules} replayPreviews={replayPreviews} />
         </div>
       ) : (
         <Card>
