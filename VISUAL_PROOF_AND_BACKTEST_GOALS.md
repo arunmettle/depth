@@ -213,6 +213,35 @@ backtest — that honest limitation is unchanged. What's new is that the same
 evidence trail is now visible everywhere a user reviews a signal (Alerts,
 history list, history detail), not just on the Alerts page.
 
+### Goal VP2.5 Status Update: Real Order-Book Ladder
+
+We previously assumed the engine had no access to real order-book depth. That
+assumption was wrong: Bybit's public v5 WebSocket exposes a free,
+no-auth `orderbook.{depth}.{symbol}` topic (snapshot + delta), same tier as
+the trade stream we already subscribe to. Since the visual proof was "not
+impressive enough," we used this genuine data source instead of fabricating
+one:
+
+- `engine/internal/marketstate/state.go` now tracks a live bid/ask book per
+  symbol (`ApplyOrderBookSnapshot`, `ApplyOrderBookDelta`, `OrderBookLevels`)
+- `engine/internal/bybit/stream.go` subscribes to `orderbook.50.{symbol}`
+  alongside `publicTrade.{symbol}` and keeps the book in sync via Bybit's
+  snapshot-then-delta protocol (delta rows with size `0` remove a level)
+- `engine/internal/proof/svg.go` renders a "Live Order Book" section: a
+  DOM-style price ladder with the top 5 real resting bid/ask levels either
+  side of the trigger price, bar length proportional to real size, and a
+  book-imbalance percentage — falling back to "Order book not captured for
+  this alert" if no snapshot has arrived yet (e.g. right after a reconnect)
+- shipped in commit `b0c890d`, deployed to Railway, confirmed subscribed
+  topics include `orderbook.50.BTCUSDT` / `orderbook.50.ETHUSDT` in production
+
+This does **not** replace the point below about a full historical heatmap —
+we only show a live snapshot at alert time, not a colored surface over time.
+That remains future scope (see VP3/heatmap note), but it does mean the "we
+don't have that data" statement in the section above is now outdated: we do
+have real depth data, we just haven't built the time-series heatmap on top
+of it yet.
+
 ## Later Goal
 
 ### Goal VP3: Deeper Historical Backtest
@@ -225,6 +254,13 @@ Potential scope:
 - exportable rule evidence
 - richer strategy evaluation
 - possible future fee/slippage-aware simulation
+
+### Goal VP4: True Historical Heatmap / Footprint
+
+Now unblocked on the data side (Bybit's `orderbook.{depth}.{symbol}` feed is
+free and public — see VP2.5 above), but still a real lift: it requires
+persisting book snapshots over time (not just at alert moments) and
+rendering a colored liquidity surface, not a single-moment ladder.
 
 ## Decision Notes
 
