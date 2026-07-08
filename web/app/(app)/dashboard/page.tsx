@@ -13,6 +13,8 @@ import { getBillingAccountForCurrentUser } from "@/lib/billing/subscriptions";
 import { buttonVariants } from "@/components/ui/button";
 import { getEngineRuntimeSummary } from "@/lib/engine-status/source";
 import { getLaunchReadiness } from "@/lib/launch-readiness";
+import { getHistorySource } from "@/lib/history/source";
+import { getProductPathState } from "@/lib/product-path";
 import {
   Card,
   CardAction,
@@ -58,6 +60,7 @@ export default async function DashboardPage() {
   const telegramConnection = auth.isAuthenticated
     ? await getTelegramConnectionForCurrentUser()
     : null;
+  const history = await getHistorySource();
   const telegramReadiness = getTelegramPairingReadiness({
     auth,
     canPersistConnection: canPersistTelegramConnection(),
@@ -72,6 +75,12 @@ export default async function DashboardPage() {
     telegramReadiness,
   });
   const activeRuleCount = rules.filter((rule) => rule.status === "active").length;
+  const productPath = getProductPathState({
+    engine,
+    historyCount: history.items.length,
+    rules,
+    telegramConnection,
+  });
 
   const engineBadge =
     engine?.deliveryStatus === "configured"
@@ -94,7 +103,9 @@ export default async function DashboardPage() {
               introducing platform clutter.
             </CardDescription>
             <CardAction>
-              <Badge variant="secondary">Goal 8 active</Badge>
+              <Badge variant={productPath.complete ? "default" : "secondary"}>
+                {productPath.complete ? "Engine path validated" : "Operator path in progress"}
+              </Badge>
             </CardAction>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-3">
@@ -120,15 +131,15 @@ export default async function DashboardPage() {
             })}
           </CardContent>
           <CardFooter className="justify-between gap-3">
-            <p className="text-sm text-muted-foreground">
-              Keep the build narrow, testable, and visually consistent from the
-              first release.
-            </p>
+            <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+              <p>Keep the build narrow, testable, and visually consistent from the first release.</p>
+              <p>{productPath.nextAction.detail}</p>
+            </div>
             <Link
-              href="/alerts"
+              href={productPath.nextAction.href}
               className={cn(buttonVariants({ variant: "outline" }))}
             >
-              Configure rules
+              {productPath.nextAction.label}
               <ArrowRightIcon data-icon="inline-end" />
             </Link>
           </CardFooter>

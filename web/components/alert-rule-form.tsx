@@ -50,6 +50,12 @@ const ruleTypeOptions: RuleTypeOption[] = [
   },
 ];
 
+const compactToggleItemClassName =
+  "min-h-9 rounded-full border border-border bg-background px-4 text-sm data-[state=on]:border-foreground data-[state=on]:bg-foreground data-[state=on]:text-background";
+
+const ruleTypeToggleItemClassName =
+  "min-h-20 w-full items-start justify-start rounded-2xl border border-border bg-background px-4 py-4 text-left hover:bg-muted/60 data-[state=on]:border-foreground data-[state=on]:bg-foreground data-[state=on]:text-background";
+
 function getSingleToggleValue(value: string | string[] | null) {
   if (Array.isArray(value)) {
     return value[0] ?? null;
@@ -151,6 +157,15 @@ export function AlertRuleForm({ selectedRule }: AlertRuleFormProps) {
       <input name="trapSide" type="hidden" value={trapSide} />
 
       <FieldGroup>
+        <div className="rounded-2xl border border-border bg-muted/30 px-4 py-4">
+          <p className="text-sm font-medium">Live rule behavior</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Keep each rule narrow and trader-readable. The strongest v1 setup is
+            one clear pattern, one market, one timeframe, and an obvious active
+            or paused state.
+          </p>
+        </div>
+
         <Field>
           <FieldLabel htmlFor="name">Rule name</FieldLabel>
           <FieldContent>
@@ -182,17 +197,20 @@ export function AlertRuleForm({ selectedRule }: AlertRuleFormProps) {
                   setRuleType(nextValue as typeof ruleType);
                 }
               }}
+              spacing={3}
+              variant="outline"
               value={[ruleType]}
             >
               {ruleTypeOptions.map((option) => (
                 <ToggleGroupItem
                   key={option.value}
-                  className="w-full justify-start px-4 py-3 text-left"
+                  className={ruleTypeToggleItemClassName}
+                  size="lg"
                   value={option.value}
                 >
                   <span className="flex flex-col gap-1">
-                    <span>{option.label}</span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-sm font-semibold">{option.label}</span>
+                    <span className="text-xs leading-5 text-muted-foreground group-data-[state=on]/toggle:text-background/80">
                       {option.description}
                     </span>
                   </span>
@@ -206,6 +224,7 @@ export function AlertRuleForm({ selectedRule }: AlertRuleFormProps) {
           <FieldLabel>Market</FieldLabel>
           <FieldContent>
             <ToggleGroup
+              className="flex flex-wrap"
               onValueChange={(value) => {
                 const nextValue = getSingleToggleValue(value);
 
@@ -213,10 +232,16 @@ export function AlertRuleForm({ selectedRule }: AlertRuleFormProps) {
                   setMarketSymbol(nextValue);
                 }
               }}
+              spacing={2}
+              variant="outline"
               value={[marketSymbol]}
             >
               {supportedMarkets.map((market) => (
-                <ToggleGroupItem key={market} value={market}>
+                <ToggleGroupItem
+                  key={market}
+                  className={compactToggleItemClassName}
+                  value={market}
+                >
                   {market}
                 </ToggleGroupItem>
               ))}
@@ -228,6 +253,7 @@ export function AlertRuleForm({ selectedRule }: AlertRuleFormProps) {
           <FieldLabel>Timeframe</FieldLabel>
           <FieldContent>
             <ToggleGroup
+              className="flex flex-wrap"
               onValueChange={(value) => {
                 const nextValue = getSingleToggleValue(value);
 
@@ -235,10 +261,13 @@ export function AlertRuleForm({ selectedRule }: AlertRuleFormProps) {
                   setTimeframe(nextValue);
                 }
               }}
+              spacing={2}
+              variant="outline"
               value={[timeframe]}
             >
               {supportedTimeframes.map((supportedTimeframe) => (
                 <ToggleGroupItem
+                  className={compactToggleItemClassName}
                   key={supportedTimeframe}
                   value={supportedTimeframe}
                 >
@@ -253,6 +282,7 @@ export function AlertRuleForm({ selectedRule }: AlertRuleFormProps) {
           <FieldLabel>Status</FieldLabel>
           <FieldContent>
             <ToggleGroup
+              className="flex flex-wrap"
               onValueChange={(value) => {
                 const nextValue = getSingleToggleValue(value);
 
@@ -260,10 +290,16 @@ export function AlertRuleForm({ selectedRule }: AlertRuleFormProps) {
                   setStatus(nextValue);
                 }
               }}
+              spacing={2}
+              variant="outline"
               value={[status]}
             >
               {supportedStatuses.map((supportedStatus) => (
-                <ToggleGroupItem key={supportedStatus} value={supportedStatus}>
+                <ToggleGroupItem
+                  key={supportedStatus}
+                  className={compactToggleItemClassName}
+                  value={supportedStatus}
+                >
                   {supportedStatus === "active" ? "Active" : "Paused"}
                 </ToggleGroupItem>
               ))}
@@ -331,6 +367,7 @@ export function AlertRuleForm({ selectedRule }: AlertRuleFormProps) {
               <FieldLabel>Trap side</FieldLabel>
               <FieldContent>
                 <ToggleGroup
+                  className="flex flex-wrap"
                   onValueChange={(value) => {
                     const nextValue = getSingleToggleValue(value);
 
@@ -338,11 +375,19 @@ export function AlertRuleForm({ selectedRule }: AlertRuleFormProps) {
                       setTrapSide(nextValue);
                     }
                   }}
+                  spacing={2}
+                  variant="outline"
                   value={[trapSide]}
                 >
-                  <ToggleGroupItem value="both">Both</ToggleGroupItem>
-                  <ToggleGroupItem value="buyers">Buyers</ToggleGroupItem>
-                  <ToggleGroupItem value="sellers">Sellers</ToggleGroupItem>
+                  <ToggleGroupItem className={compactToggleItemClassName} value="both">
+                    Both
+                  </ToggleGroupItem>
+                  <ToggleGroupItem className={compactToggleItemClassName} value="buyers">
+                    Buyers
+                  </ToggleGroupItem>
+                  <ToggleGroupItem className={compactToggleItemClassName} value="sellers">
+                    Sellers
+                  </ToggleGroupItem>
                 </ToggleGroup>
               </FieldContent>
             </Field>

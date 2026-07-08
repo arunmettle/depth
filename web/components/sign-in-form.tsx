@@ -44,8 +44,8 @@ export function SignInForm({ nextPath = "/dashboard" }: SignInFormProps) {
               required
             />
             <FieldDescription>
-              We use a magic link to keep onboarding lightweight and
-              mobile-friendly.
+              Email sign-in stays available as a fallback if Google auth is not
+              available yet.
             </FieldDescription>
           </FieldContent>
         </Field>
@@ -56,7 +56,7 @@ export function SignInForm({ nextPath = "/dashboard" }: SignInFormProps) {
       ) : null}
 
       <Button type="submit" disabled={isPending}>
-        {isPending ? "Sending link..." : "Send magic link"}
+        {isPending ? "Sending link..." : "Send email link"}
       </Button>
     </form>
   );

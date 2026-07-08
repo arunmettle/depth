@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRightIcon } from "lucide-react";
 
 import { BrandMark } from "@/components/brand-mark";
+import { GoogleSignInButton } from "@/components/google-sign-in-button";
 import { SignInForm } from "@/components/sign-in-form";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -55,8 +56,14 @@ export default async function SignInPage({
             <CardContent className="flex flex-col gap-6">
               <div className="flex flex-wrap gap-2">
                 <Badge variant="secondary">Telegram-first</Badge>
-                <Badge variant="secondary">Magic link auth</Badge>
+                <Badge variant="secondary">Google auth preferred</Badge>
                 <Badge variant="secondary">Production shell ready</Badge>
+              </div>
+              <GoogleSignInButton nextPath={nextPath} />
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <span className="h-px flex-1 bg-border" />
+                <span>or use email</span>
+                <span className="h-px flex-1 bg-border" />
               </div>
               <SignInForm nextPath={nextPath} />
             </CardContent>
@@ -77,7 +84,7 @@ export default async function SignInPage({
                   {auth.isAuthenticated
                     ? `Signed in as ${auth.email ?? "an active user"}.`
                     : auth.isConfigured
-                      ? "Ready for a magic-link session."
+                      ? "Ready for Google or email sign-in."
                       : "Waiting for Supabase project credentials."}
                 </span>
               </div>

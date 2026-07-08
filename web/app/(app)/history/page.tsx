@@ -1,17 +1,23 @@
 import { HistoryAlertCard } from "@/components/history-alert-card";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  findReplayPreviewForRuleName,
-  getAlertRuleReplayPreviews,
-} from "@/lib/alerts/replay";
-import { getAlertRulesForCurrentUser } from "@/lib/alerts/rules";
 import {
   getEngineDeliveryLabel,
   summarizeEngineDelivery,
 } from "@/lib/engine-status/presentation";
 import { getEngineRuntimeSummary } from "@/lib/engine-status/source";
 import { getHistorySource } from "@/lib/history/source";
+import { getProductPathState } from "@/lib/product-path";
+import { getAuthState } from "@/lib/supabase/server";
+import { getTelegramConnectionForCurrentUser } from "@/lib/telegram/connections";
+import {
+  findReplayPreviewForRuleName,
+  getAlertRuleReplayPreviews,
+} from "@/lib/alerts/replay";
+import { getAlertRulesForCurrentUser } from "@/lib/alerts/rules";
+import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 function getHistorySourceLabel(source: "engine" | "mock" | "supabase") {
   switch (source) {
@@ -25,13 +31,55 @@ function getHistorySourceLabel(source: "engine" | "mock" | "supabase") {
 }
 
 export default async function HistoryPage() {
+  const auth = await getAuthState();
   const engine = await getEngineRuntimeSummary();
   const history = await getHistorySource();
   const rules = await getAlertRulesForCurrentUser();
   const replayPreviews = await getAlertRuleReplayPreviews(rules);
+  const telegramConnection = auth.isAuthenticated
+    ? await getTelegramConnectionForCurrentUser()
+    : null;
+  const productPath = getProductPathState({
+    engine,
+    historyCount: history.items.length,
+    rules,
+    telegramConnection,
+  });
 
   return (
     <div className="flex flex-col gap-6">
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={productPath.complete ? "default" : "secondary"}>
+              {productPath.complete ? "Review loop live" : "Review loop incomplete"}
+            </Badge>
+            <Badge variant="outline">{history.items.length} proof items</Badge>
+          </div>
+          <CardTitle>Review path</CardTitle>
+          <CardDescription>
+            Keep proof review grounded in the real operating loop instead of
+            treating history as a passive archive.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          {productPath.items.map((item) => (
+            <div
+              key={item.label}
+              className="rounded-xl border border-border bg-background px-4 py-4"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium">{item.label}</p>
+                <Badge variant={item.ready ? "outline" : "secondary"}>
+                  {item.ready ? "Ready" : "Blocked"}
+                </Badge>
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">{item.detail}</p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center gap-2">
@@ -134,6 +182,14 @@ export default async function HistoryPage() {
               the live engine starts writing history.
             </CardDescription>
           </CardHeader>
+          <CardContent>
+            <Link
+              href={productPath.nextAction.href}
+              className={cn(buttonVariants({ variant: "outline" }))}
+            >
+              {productPath.nextAction.label}
+            </Link>
+          </CardContent>
         </Card>
       )}
     </div>
