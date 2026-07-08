@@ -35,6 +35,7 @@ type supabaseAlertHistoryRow struct {
 	ProofMediaType        string  `json:"proof_media_type"`
 	ProofWidth            int     `json:"proof_width"`
 	RuleName              string  `json:"rule_name"`
+	RuleType              string  `json:"rule_type"`
 	Side                  string  `json:"side"`
 	Timeframe             string  `json:"timeframe"`
 	TradePlanEntryPrice   float64 `json:"trade_plan_entry_price"`
@@ -434,6 +435,7 @@ func mapAlertHistoryRow(record alerts.Record) supabaseAlertHistoryRow {
 		ProofMediaType:        record.Proof.MediaType,
 		ProofWidth:            record.Proof.Width,
 		RuleName:              record.RuleName,
+		RuleType:              record.RuleType,
 		Side:                  record.Side,
 		Timeframe:             record.Timeframe,
 		TradePlanEntryPrice:   record.TradePlan.EntryPrice,

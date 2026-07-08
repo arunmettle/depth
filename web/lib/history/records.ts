@@ -3,7 +3,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
 const SELECT_COLUMNS =
-  "created_at,delivery_status,id,market_symbol,message,proof_content,proof_content_hash,proof_height,proof_media_type,proof_width,rule_name,side,timeframe,user_id,trade_plan_entry_price,trade_plan_stop_loss,trade_plan_take_profit_1,trade_plan_take_profit_2,trade_plan_signal_low,trade_plan_signal_high,trade_plan_trigger_price,trade_plan_risk_reward_1,trade_plan_risk_reward_2,outcome_status,outcome_hit_price,outcome_hit_at,outcome_r_multiple,outcome_checked_at,outcome_note";
+  "created_at,delivery_status,id,market_symbol,message,proof_content,proof_content_hash,proof_height,proof_media_type,proof_width,rule_name,rule_type,side,timeframe,user_id,trade_plan_entry_price,trade_plan_stop_loss,trade_plan_take_profit_1,trade_plan_take_profit_2,trade_plan_signal_low,trade_plan_signal_high,trade_plan_trigger_price,trade_plan_risk_reward_1,trade_plan_risk_reward_2,outcome_status,outcome_hit_price,outcome_hit_at,outcome_r_multiple,outcome_checked_at,outcome_note";
 
 type AlertHistoryRow = {
   created_at: string;
@@ -23,6 +23,7 @@ type AlertHistoryRow = {
   proof_media_type: AlertRecord["proof"]["mediaType"];
   proof_width: number;
   rule_name: string;
+  rule_type: AlertRecord["ruleType"];
   side: AlertRecord["side"];
   timeframe: AlertRecord["timeframe"];
   trade_plan_entry_price: number | null;
@@ -86,6 +87,7 @@ function mapAlertHistoryRow(row: AlertHistoryRow): AlertRecord {
       width: row.proof_width,
     },
     ruleName: row.rule_name,
+    ruleType: row.rule_type,
     side: row.side,
     timeframe: row.timeframe,
     tradePlan: mapTradePlan(row),

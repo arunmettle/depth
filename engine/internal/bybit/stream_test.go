@@ -270,8 +270,10 @@ func TestStatusIncludesLaunchEvaluatorRules(t *testing.T) {
 	}, logger)
 
 	status := stream.Status()
-	if status.Evaluator.ConfiguredRules != 6 {
-		t.Fatalf("expected 6 configured launch rules, got %d", status.Evaluator.ConfiguredRules)
+	// 2 symbols * 3 timeframes * 2 rule types (stacked imbalance + trapped
+	// traders) = 12 launch rules.
+	if status.Evaluator.ConfiguredRules != 12 {
+		t.Fatalf("expected 12 configured launch rules, got %d", status.Evaluator.ConfiguredRules)
 	}
 }
 

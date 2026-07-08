@@ -17,6 +17,7 @@ type Rule struct {
 	Status           string
 	Timeframe        string
 	StackedImbalance *StackedImbalanceParams
+	TrappedTraders   *TrappedTradersParams
 	UserID           string
 }
 
@@ -25,11 +26,28 @@ type StackedImbalanceParams struct {
 	ThresholdMultiplier float64
 }
 
+// TrappedTradersParams configures the failed-breakout reversal detector: one
+// candle shows aggressive one-sided dominance (a "trap" candle), then the
+// very next candle reverses hard enough to round-trip through the trap
+// candle's opposite extreme with opposing dominance, meaning the traders who
+// pushed the trap candle are now underwater and likely to get squeezed out.
+type TrappedTradersParams struct {
+	// MinAbsorptionVolume is the minimum notional (price * size) volume the
+	// trap candle's dominant side must have moved for the reversal to
+	// count as a real trapped-trader event rather than low-volume noise.
+	MinAbsorptionVolume float64
+	// TrapSide restricts which side's traders we're looking to catch
+	// trapped: "buyers" (bearish reversal signal), "sellers" (bullish
+	// reversal signal), or "both".
+	TrapSide string
+}
+
 type Event struct {
 	BucketStart time.Time `json:"bucketStart"`
 	Message     string    `json:"message"`
 	RuleID      string    `json:"ruleId"`
 	RuleName    string    `json:"ruleName"`
+	RuleType    string    `json:"ruleType"`
 	Side        string    `json:"side"`
 	Symbol      string    `json:"symbol"`
 	Timeframe   string    `json:"timeframe"`
@@ -60,7 +78,7 @@ type Suppressor struct {
 }
 
 func LaunchRules(symbols []string) []Rule {
-	rules := make([]Rule, 0, len(symbols)*3)
+	rules := make([]Rule, 0, len(symbols)*6)
 
 	for _, symbol := range symbols {
 		for _, timeframe := range []string{"1m", "5m", "15m"} {
@@ -74,6 +92,19 @@ func LaunchRules(symbols []string) []Rule {
 				StackedImbalance: &StackedImbalanceParams{
 					ConfirmationRows:    3,
 					ThresholdMultiplier: 300,
+				},
+			})
+
+			rules = append(rules, Rule{
+				ID:           fmt.Sprintf("launch:%s:%s:trapped-traders", symbol, timeframe),
+				MarketSymbol: symbol,
+				Name:         fmt.Sprintf("%s %s trapped traders", symbol, timeframe),
+				RuleType:     "trapped_traders",
+				Status:       "active",
+				Timeframe:    timeframe,
+				TrappedTraders: &TrappedTradersParams{
+					MinAbsorptionVolume: 250000,
+					TrapSide:            "both",
 				},
 			})
 		}
@@ -96,7 +127,22 @@ func NewSuppressor() *Suppressor {
 }
 
 func (e *Evaluator) Evaluate(rule Rule) (*Event, bool) {
-	if rule.Status != "active" || rule.RuleType != "stacked_imbalance" || rule.StackedImbalance == nil {
+	if rule.Status != "active" {
+		return nil, false
+	}
+
+	switch rule.RuleType {
+	case "stacked_imbalance":
+		return e.evaluateStackedImbalance(rule)
+	case "trapped_traders":
+		return e.evaluateTrappedTraders(rule)
+	default:
+		return nil, false
+	}
+}
+
+func (e *Evaluator) evaluateStackedImbalance(rule Rule) (*Event, bool) {
+	if rule.StackedImbalance == nil {
 		return nil, false
 	}
 
@@ -149,6 +195,68 @@ func (e *Evaluator) Evaluate(rule Rule) (*Event, bool) {
 		),
 		RuleID:    rule.ID,
 		RuleName:  rule.Name,
+		RuleType:  rule.RuleType,
+		Side:      side,
+		Symbol:    rule.MarketSymbol,
+		Timeframe: rule.Timeframe,
+		TradePlan: tradePlan,
+		UserID:    rule.UserID,
+	}, true
+}
+
+func (e *Evaluator) evaluateTrappedTraders(rule Rule) (*Event, bool) {
+	if rule.TrappedTraders == nil {
+		return nil, false
+	}
+
+	current, ok := e.state.CurrentCandle(rule.MarketSymbol, rule.Timeframe)
+	if !ok {
+		return nil, false
+	}
+
+	recent := e.state.RecentCandles(rule.MarketSymbol, rule.Timeframe, 1)
+	if len(recent) < 1 {
+		return nil, false
+	}
+
+	window := append(recent, current)
+
+	side, ok := detectTrappedTraders(window, rule.TrappedTraders.MinAbsorptionVolume, rule.TrappedTraders.TrapSide)
+	if !ok {
+		return nil, false
+	}
+
+	key := duplicateKey(rule.ID, current.BucketStart, side)
+	if !e.suppressor.Allow(key, current.BucketStart) {
+		return nil, false
+	}
+
+	tradePlan, ok := BuildTradePlan(window, side)
+	if !ok {
+		return nil, false
+	}
+
+	trappedSide := "buyers"
+	if side == "buy" {
+		trappedSide = "sellers"
+	}
+
+	return &Event{
+		BucketStart: current.BucketStart,
+		Message: fmt.Sprintf(
+			"%s %s trapped %s confirmed: failed breakout round-tripped through the prior candle on at least %.0f notional. Entry %.2f, stop %.2f, TP1 %.2f, TP2 %.2f.",
+			rule.MarketSymbol,
+			rule.Timeframe,
+			trappedSide,
+			rule.TrappedTraders.MinAbsorptionVolume,
+			tradePlan.EntryPrice,
+			tradePlan.StopLoss,
+			tradePlan.TakeProfit1,
+			tradePlan.TakeProfit2,
+		),
+		RuleID:    rule.ID,
+		RuleName:  rule.Name,
+		RuleType:  rule.RuleType,
 		Side:      side,
 		Symbol:    rule.MarketSymbol,
 		Timeframe: rule.Timeframe,
@@ -195,6 +303,65 @@ func dominantSide(candle marketstate.Candle) (string, float64, bool) {
 		return "sell", imbalanceRatio(candle.SellVolume, candle.BuyVolume), true
 	default:
 		return "", 0, false
+	}
+}
+
+// detectTrappedTraders looks for a two-candle failed-breakout reversal: the
+// prior (older) candle shows dominant one-sided volume (the "trap" candle),
+// and the current candle reverses with opposing dominance hard enough to
+// close back through the trap candle's opposite extreme. That round trip
+// means whoever bought (or sold) the trap candle is now underwater, so we
+// signal the opposite direction expecting them to get squeezed out.
+//
+// candles must be exactly [prior, current] in chronological order.
+func detectTrappedTraders(candles []marketstate.Candle, minAbsorptionVolume float64, trapSide string) (string, bool) {
+	if len(candles) != 2 {
+		return "", false
+	}
+
+	prior, current := candles[0], candles[1]
+
+	priorSide, _, ok := dominantSide(prior)
+	if !ok {
+		return "", false
+	}
+
+	currentSide, _, ok := dominantSide(current)
+	if !ok {
+		return "", false
+	}
+
+	if priorSide == currentSide {
+		return "", false
+	}
+
+	// Approximate notional (quote-currency) volume using the trap candle's
+	// own close, since candles only track base-asset size, not notional.
+	switch priorSide {
+	case "buy":
+		if trapSide == "sellers" {
+			return "", false
+		}
+		if current.Close >= prior.Low {
+			return "", false
+		}
+		if prior.BuyVolume*prior.Close < minAbsorptionVolume {
+			return "", false
+		}
+		return "sell", true
+	case "sell":
+		if trapSide == "buyers" {
+			return "", false
+		}
+		if current.Close <= prior.High {
+			return "", false
+		}
+		if prior.SellVolume*prior.Close < minAbsorptionVolume {
+			return "", false
+		}
+		return "buy", true
+	default:
+		return "", false
 	}
 }
 

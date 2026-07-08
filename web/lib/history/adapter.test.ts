@@ -18,6 +18,7 @@ describe("history adapter", () => {
         width: 720,
       },
       ruleName: "BTC 1m stacked imbalance",
+      ruleType: "stacked_imbalance",
       side: "buy",
       timeframe: "1m",
       tradePlan: {

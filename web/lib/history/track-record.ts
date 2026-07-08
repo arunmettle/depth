@@ -18,6 +18,11 @@ export type TrackRecordSummary = {
   winRatePercent: number | null;
 };
 
+export type RuleTypeTrackRecord = {
+  ruleType: AlertRecord["ruleType"];
+  summary: TrackRecordSummary;
+};
+
 /**
  * Summarizes real tracked outcomes (see engine/internal/outcome) across a
  * set of alert history items. Every number here reflects whether the
@@ -81,4 +86,31 @@ export function summarizeTrackRecord(items: AlertRecord[]): TrackRecordSummary {
     wins,
     winRatePercent: resolvedCount > 0 ? (wins / resolvedCount) * 100 : null,
   };
+}
+
+/**
+ * Breaks the same real-outcome summary down per rule type (e.g.
+ * stacked_imbalance vs trapped_traders) so users can see which alpha
+ * strategy is actually carrying the edge instead of only a single blended
+ * aggregate. Only rule types actually present in the given items are
+ * returned, ordered by resolved-alert count (most active first).
+ */
+export function summarizeTrackRecordByRuleType(items: AlertRecord[]): RuleTypeTrackRecord[] {
+  const byRuleType = new Map<AlertRecord["ruleType"], AlertRecord[]>();
+
+  for (const item of items) {
+    const bucket = byRuleType.get(item.ruleType);
+    if (bucket) {
+      bucket.push(item);
+    } else {
+      byRuleType.set(item.ruleType, [item]);
+    }
+  }
+
+  return Array.from(byRuleType.entries())
+    .map(([ruleType, ruleItems]) => ({
+      ruleType,
+      summary: summarizeTrackRecord(ruleItems),
+    }))
+    .sort((a, b) => b.summary.resolvedCount - a.summary.resolvedCount);
 }

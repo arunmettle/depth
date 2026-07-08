@@ -27,6 +27,7 @@ const historyItem: AlertRecord = {
     width: 720,
   },
   ruleName: "BTC 1m stacked imbalance",
+  ruleType: "stacked_imbalance",
   side: "buy",
   timeframe: "1m",
 };

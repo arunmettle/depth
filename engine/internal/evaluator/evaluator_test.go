@@ -164,3 +164,178 @@ func addCandleTrade(t *testing.T, state *marketstate.State, symbol string, bucke
 		})
 	}
 }
+
+// addShapedCandle drives two same-side trades into a bucket so the
+// resulting candle has a controlled open/high/low/close and a dominant
+// side, which the simple addCandleTrade helper (fixed prices) can't
+// produce. Using only one side's volume keeps dominantSide() unambiguous
+// (dominant volume > 0 opposing volume).
+func addShapedCandle(t *testing.T, state *marketstate.State, symbol string, bucketStart time.Time, openPrice float64, closePrice float64, dominantSide string, dominantVolume float64) {
+	t.Helper()
+
+	state.UpdateTrade(marketstate.Trade{
+		Price:     openPrice,
+		Side:      dominantSide,
+		Size:      dominantVolume / 2,
+		Symbol:    symbol,
+		Timestamp: bucketStart.Add(5 * time.Second),
+	})
+
+	state.UpdateTrade(marketstate.Trade{
+		Price:     closePrice,
+		Side:      dominantSide,
+		Size:      dominantVolume / 2,
+		Symbol:    symbol,
+		Timestamp: bucketStart.Add(30 * time.Second),
+	})
+}
+
+func TestEvaluateEmitsTrappedTradersEventForTrappedBuyers(t *testing.T) {
+	state := marketstate.New()
+	start := time.Date(2026, 7, 5, 6, 0, 0, 0, time.UTC)
+
+	// Prior candle: aggressive buy breakout from 100000 up to 100100.
+	addShapedCandle(t, state, "BTCUSDT", start, 100000, 100100, "Buy", 10)
+	// Current candle: sell reversal that round-trips back below the prior
+	// candle's low of 100000, trapping the breakout buyers.
+	addShapedCandle(t, state, "BTCUSDT", start.Add(1*time.Minute), 100090, 99900, "Sell", 7)
+
+	evaluator := New(state)
+	event, ok := evaluator.Evaluate(Rule{
+		ID:           "rule-1",
+		MarketSymbol: "BTCUSDT",
+		Name:         "BTC trapped traders",
+		RuleType:     "trapped_traders",
+		Status:       "active",
+		Timeframe:    "1m",
+		TrappedTraders: &TrappedTradersParams{
+			MinAbsorptionVolume: 500000,
+			TrapSide:            "both",
+		},
+	})
+
+	if !ok || event == nil {
+		t.Fatalf("expected trapped traders event")
+	}
+
+	if event.Side != "sell" {
+		t.Fatalf("expected sell side (trapped buyers), got %s", event.Side)
+	}
+}
+
+func TestEvaluateEmitsTrappedTradersEventForTrappedSellers(t *testing.T) {
+	state := marketstate.New()
+	start := time.Date(2026, 7, 5, 6, 0, 0, 0, time.UTC)
+
+	// Prior candle: aggressive sell breakdown from 100100 down to 100000.
+	addShapedCandle(t, state, "BTCUSDT", start, 100100, 100000, "Sell", 10)
+	// Current candle: buy reversal that round-trips back above the prior
+	// candle's high of 100100, trapping the breakdown sellers.
+	addShapedCandle(t, state, "BTCUSDT", start.Add(1*time.Minute), 100010, 100200, "Buy", 7)
+
+	evaluator := New(state)
+	event, ok := evaluator.Evaluate(Rule{
+		ID:           "rule-1",
+		MarketSymbol: "BTCUSDT",
+		Name:         "BTC trapped traders",
+		RuleType:     "trapped_traders",
+		Status:       "active",
+		Timeframe:    "1m",
+		TrappedTraders: &TrappedTradersParams{
+			MinAbsorptionVolume: 500000,
+			TrapSide:            "both",
+		},
+	})
+
+	if !ok || event == nil {
+		t.Fatalf("expected trapped traders event")
+	}
+
+	if event.Side != "buy" {
+		t.Fatalf("expected buy side (trapped sellers), got %s", event.Side)
+	}
+}
+
+func TestEvaluateTrappedTradersRejectsBelowMinAbsorptionVolume(t *testing.T) {
+	state := marketstate.New()
+	start := time.Date(2026, 7, 5, 6, 0, 0, 0, time.UTC)
+
+	addShapedCandle(t, state, "BTCUSDT", start, 100000, 100100, "Buy", 10)
+	addShapedCandle(t, state, "BTCUSDT", start.Add(1*time.Minute), 100090, 99900, "Sell", 7)
+
+	evaluator := New(state)
+	event, ok := evaluator.Evaluate(Rule{
+		ID:           "rule-1",
+		MarketSymbol: "BTCUSDT",
+		Name:         "BTC trapped traders",
+		RuleType:     "trapped_traders",
+		Status:       "active",
+		Timeframe:    "1m",
+		TrappedTraders: &TrappedTradersParams{
+			// The trap candle's notional volume is ~10 * 100100 = 1,001,000,
+			// well below this threshold, so it should not qualify.
+			MinAbsorptionVolume: 5_000_000,
+			TrapSide:            "both",
+		},
+	})
+
+	if ok || event != nil {
+		t.Fatalf("expected low-volume trap candle to be rejected")
+	}
+}
+
+func TestEvaluateTrappedTradersRespectsTrapSideFilter(t *testing.T) {
+	state := marketstate.New()
+	start := time.Date(2026, 7, 5, 6, 0, 0, 0, time.UTC)
+
+	// Trapped-buyers setup (bearish signal), but the rule only wants to
+	// catch trapped sellers (bullish signal), so it should not fire.
+	addShapedCandle(t, state, "BTCUSDT", start, 100000, 100100, "Buy", 10)
+	addShapedCandle(t, state, "BTCUSDT", start.Add(1*time.Minute), 100090, 99900, "Sell", 7)
+
+	evaluator := New(state)
+	event, ok := evaluator.Evaluate(Rule{
+		ID:           "rule-1",
+		MarketSymbol: "BTCUSDT",
+		Name:         "BTC trapped traders",
+		RuleType:     "trapped_traders",
+		Status:       "active",
+		Timeframe:    "1m",
+		TrappedTraders: &TrappedTradersParams{
+			MinAbsorptionVolume: 500000,
+			TrapSide:            "sellers",
+		},
+	})
+
+	if ok || event != nil {
+		t.Fatalf("expected trapSide filter to reject a trapped-buyers setup")
+	}
+}
+
+func TestEvaluateTrappedTradersRejectsWithoutFullReversal(t *testing.T) {
+	state := marketstate.New()
+	start := time.Date(2026, 7, 5, 6, 0, 0, 0, time.UTC)
+
+	addShapedCandle(t, state, "BTCUSDT", start, 100000, 100100, "Buy", 10)
+	// Sell dominant but does not close back below the prior candle's low
+	// of 100000, so this is not a full round-trip reversal yet.
+	addShapedCandle(t, state, "BTCUSDT", start.Add(1*time.Minute), 100090, 100050, "Sell", 7)
+
+	evaluator := New(state)
+	event, ok := evaluator.Evaluate(Rule{
+		ID:           "rule-1",
+		MarketSymbol: "BTCUSDT",
+		Name:         "BTC trapped traders",
+		RuleType:     "trapped_traders",
+		Status:       "active",
+		Timeframe:    "1m",
+		TrappedTraders: &TrappedTradersParams{
+			MinAbsorptionVolume: 500000,
+			TrapSide:            "both",
+		},
+	})
+
+	if ok || event != nil {
+		t.Fatalf("expected partial reversal to be rejected")
+	}
+}

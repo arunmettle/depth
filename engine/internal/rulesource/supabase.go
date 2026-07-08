@@ -26,6 +26,8 @@ type supabaseAlertRuleRow struct {
 	Params       struct {
 		ConfirmationRows    int     `json:"confirmationRows"`
 		ThresholdMultiplier float64 `json:"thresholdMultiplier"`
+		MinAbsorptionVolume float64 `json:"minAbsorptionVolume"`
+		TrapSide            string  `json:"trapSide"`
 	} `json:"params"`
 	RuleType  string `json:"rule_type"`
 	Status    string `json:"status"`
@@ -51,7 +53,7 @@ func (s *SupabaseSource) Load(ctx context.Context) ([]evaluator.Rule, error) {
 	query := endpoint.Query()
 	query.Set("select", "id,user_id,name,market_symbol,timeframe,rule_type,status,params")
 	query.Set("status", "eq.active")
-	query.Set("rule_type", "eq.stacked_imbalance")
+	query.Set("rule_type", "in.(stacked_imbalance,trapped_traders)")
 	if len(s.symbols) > 0 {
 		query.Set("market_symbol", "in.("+strings.Join(s.symbols, ",")+")")
 	}
@@ -87,23 +89,51 @@ func (s *SupabaseSource) Load(ctx context.Context) ([]evaluator.Rule, error) {
 			continue
 		}
 
-		if row.Params.ConfirmationRows <= 0 || row.Params.ThresholdMultiplier <= 0 {
+		switch row.RuleType {
+		case "stacked_imbalance":
+			if row.Params.ConfirmationRows <= 0 || row.Params.ThresholdMultiplier <= 0 {
+				continue
+			}
+
+			rules = append(rules, evaluator.Rule{
+				ID:           row.ID,
+				MarketSymbol: row.MarketSymbol,
+				Name:         row.Name,
+				RuleType:     row.RuleType,
+				Status:       row.Status,
+				Timeframe:    row.Timeframe,
+				UserID:       row.UserID,
+				StackedImbalance: &evaluator.StackedImbalanceParams{
+					ConfirmationRows:    row.Params.ConfirmationRows,
+					ThresholdMultiplier: row.Params.ThresholdMultiplier,
+				},
+			})
+		case "trapped_traders":
+			if row.Params.MinAbsorptionVolume <= 0 {
+				continue
+			}
+
+			trapSide := row.Params.TrapSide
+			if trapSide != "buyers" && trapSide != "sellers" && trapSide != "both" {
+				continue
+			}
+
+			rules = append(rules, evaluator.Rule{
+				ID:           row.ID,
+				MarketSymbol: row.MarketSymbol,
+				Name:         row.Name,
+				RuleType:     row.RuleType,
+				Status:       row.Status,
+				Timeframe:    row.Timeframe,
+				UserID:       row.UserID,
+				TrappedTraders: &evaluator.TrappedTradersParams{
+					MinAbsorptionVolume: row.Params.MinAbsorptionVolume,
+					TrapSide:            trapSide,
+				},
+			})
+		default:
 			continue
 		}
-
-		rules = append(rules, evaluator.Rule{
-			ID:           row.ID,
-			MarketSymbol: row.MarketSymbol,
-			Name:         row.Name,
-			RuleType:     row.RuleType,
-			Status:       row.Status,
-			Timeframe:    row.Timeframe,
-			UserID:       row.UserID,
-			StackedImbalance: &evaluator.StackedImbalanceParams{
-				ConfirmationRows:    row.Params.ConfirmationRows,
-				ThresholdMultiplier: row.Params.ThresholdMultiplier,
-			},
-		})
 	}
 
 	return rules, nil

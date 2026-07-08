@@ -66,6 +66,7 @@ type alertRecord struct {
 	Message        string        `json:"message"`
 	Proof          proofArtifact `json:"proof"`
 	RuleName       string        `json:"ruleName"`
+	RuleType       string        `json:"ruleType"`
 	Side           string        `json:"side"`
 	Timeframe      string        `json:"timeframe"`
 }
@@ -326,6 +327,7 @@ func toAlertRecord(record alerts.Record) alertRecord {
 			Width:       record.Proof.Width,
 		},
 		RuleName:  record.RuleName,
+		RuleType:  record.RuleType,
 		Side:      record.Side,
 		Timeframe: record.Timeframe,
 	}

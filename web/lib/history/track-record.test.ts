@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { summarizeTrackRecord } from "@/lib/history/track-record";
+import { summarizeTrackRecord, summarizeTrackRecordByRuleType } from "@/lib/history/track-record";
 import type { AlertRecord } from "@/lib/history/schema";
 
 function buildAlert(overrides: Partial<AlertRecord>): AlertRecord {
@@ -18,6 +18,7 @@ function buildAlert(overrides: Partial<AlertRecord>): AlertRecord {
       width: 720,
     },
     ruleName: "BTC 1m stacked imbalance",
+    ruleType: "stacked_imbalance",
     side: "buy",
     timeframe: "1m",
     ...overrides,
@@ -81,5 +82,46 @@ describe("summarizeTrackRecord", () => {
     expect(summary.resolvedCount).toBe(1);
     expect(summary.totalRMultiple).toBe(0);
     expect(summary.averageRMultiple).toBe(0);
+  });
+});
+
+describe("summarizeTrackRecordByRuleType", () => {
+  it("groups alerts by rule type and summarizes each independently", () => {
+    const breakdown = summarizeTrackRecordByRuleType([
+      buildAlert({
+        id: "a",
+        ruleType: "stacked_imbalance",
+        outcome: { status: "tp1_hit", rMultiple: 1 },
+      }),
+      buildAlert({
+        id: "b",
+        ruleType: "stacked_imbalance",
+        outcome: { status: "stop_hit", rMultiple: -1 },
+      }),
+      buildAlert({
+        id: "c",
+        ruleType: "trapped_traders",
+        outcome: { status: "tp2_hit", rMultiple: 2 },
+      }),
+    ]);
+
+    expect(breakdown).toHaveLength(2);
+
+    const stacked = breakdown.find((entry) => entry.ruleType === "stacked_imbalance");
+    const trapped = breakdown.find((entry) => entry.ruleType === "trapped_traders");
+
+    expect(stacked?.summary.resolvedCount).toBe(2);
+    expect(stacked?.summary.totalRMultiple).toBe(0);
+    expect(trapped?.summary.resolvedCount).toBe(1);
+    expect(trapped?.summary.totalRMultiple).toBe(2);
+  });
+
+  it("returns only rule types actually present in the given items", () => {
+    const breakdown = summarizeTrackRecordByRuleType([
+      buildAlert({ id: "a", ruleType: "stacked_imbalance" }),
+    ]);
+
+    expect(breakdown).toHaveLength(1);
+    expect(breakdown[0].ruleType).toBe("stacked_imbalance");
   });
 });

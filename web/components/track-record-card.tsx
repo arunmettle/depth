@@ -1,10 +1,15 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { summarizeTrackRecord } from "@/lib/history/track-record";
+import { summarizeTrackRecord, summarizeTrackRecordByRuleType } from "@/lib/history/track-record";
 import type { AlertRecord } from "@/lib/history/schema";
 
 type TrackRecordCardProps = {
   items: AlertRecord[];
+};
+
+const RULE_TYPE_LABELS: Record<AlertRecord["ruleType"], string> = {
+  stacked_imbalance: "Stacked imbalance",
+  trapped_traders: "Trapped traders",
 };
 
 function formatSignedR(value: number) {
@@ -36,6 +41,7 @@ function buildSparklinePath(values: number[], width: number, height: number) {
 
 export function TrackRecordCard({ items }: TrackRecordCardProps) {
   const summary = summarizeTrackRecord(items);
+  const byRuleType = summarizeTrackRecordByRuleType(items);
   const curveValues = summary.equityCurve.map((point) => point.cumulativeR);
   const path = buildSparklinePath(curveValues, 280, 72);
   const hasResolvedAlerts = summary.resolvedCount > 0;
@@ -107,6 +113,44 @@ export function TrackRecordCard({ items }: TrackRecordCardProps) {
           )}
         </div>
       </CardContent>
+      {byRuleType.length > 1 ? (
+        <CardContent className="grid gap-3 border-t border-border pt-6 md:grid-cols-2">
+          {byRuleType.map(({ ruleType, summary: ruleSummary }) => (
+            <div key={ruleType} className="rounded-xl border border-border bg-background p-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">{RULE_TYPE_LABELS[ruleType]}</p>
+                <Badge variant={ruleSummary.resolvedCount > 0 ? "default" : "secondary"}>
+                  {ruleSummary.resolvedCount} resolved
+                </Badge>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Win rate</p>
+                  <p className="text-lg font-semibold tracking-tight">
+                    {ruleSummary.winRatePercent === null
+                      ? "—"
+                      : `${ruleSummary.winRatePercent.toFixed(0)}%`}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Avg R</p>
+                  <p className="text-lg font-semibold tracking-tight">
+                    {ruleSummary.averageRMultiple === null
+                      ? "—"
+                      : formatSignedR(ruleSummary.averageRMultiple)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Cumulative R</p>
+                  <p className="text-lg font-semibold tracking-tight">
+                    {formatSignedR(ruleSummary.totalRMultiple)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      ) : null}
     </Card>
   );
 }

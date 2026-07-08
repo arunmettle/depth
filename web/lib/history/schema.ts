@@ -49,6 +49,7 @@ export type AlertRecord = {
   outcome?: AlertOutcome;
   proof: ProofArtifact;
   ruleName: string;
+  ruleType: "stacked_imbalance" | "trapped_traders";
   side: "buy" | "sell";
   timeframe: "1m" | "5m" | "15m";
   tradePlan?: TradePlan;

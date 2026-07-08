@@ -479,3 +479,254 @@ Confirms the MVP is genuinely safe for real users, credible to market publicly, 
 6. Finish Goal 8 live persisted-history validation
 7. Build Goal 9 billing and subscription gating
 8. Complete Goal 10 production readiness and Founding Access launch validation
+
+## Engine-First Execution Track
+
+This is the active build track from here onward.
+
+The rule is simple:
+
+- Frontend work must enable the engine, validate the engine, or expose engine truth clearly
+- No new UI surface should be added unless it helps setup, operate, validate, or review the engine
+- Keep implementation narrow, testable, and reversible
+- Prefer one reliable path over multiple flexible paths
+
+## Active Engine Goal
+
+`E6: Operator Harness and Launch Signoff`
+
+Everything else is downstream of this. Until `E6` is signed off, new work should only help the operator prove the engine is launch-safe with repeatable evidence and minimal guesswork.
+
+## Engine Goal E1: Live Engine Boot Reliability
+
+### What This Achieves
+
+Makes the engine start cleanly, connect to Bybit, expose stable health signals, and fail clearly when configuration is incomplete.
+
+### Achieve
+
+- Confirm engine boot contract is minimal and explicit
+- Validate `/`, `/healthz`, and `/readyz` locally and in live mode
+- Validate websocket connect, subscribe, warm-up, stale detection, and reconnect behavior
+- Keep only the configuration required for launch symbols and launch timeframes
+- Produce one repeatable run command for local and production-like validation
+
+### Achieved
+
+- Engine boot contract stays narrow: one process, Bybit websocket, health routes, and launch-scope symbols
+- Live local validation passed against Bybit using the existing Goal 5 harness
+- `/`, `/healthz`, and `/readyz` were verified from a real running engine process
+- Ready state was confirmed with live market messages, symbol coverage, and `1m`, `5m`, `15m` candle coverage for `BTCUSDT` and `ETHUSDT`
+- Existing focused tests already cover stale readiness, disconnected readiness, and reconnect backoff behavior
+- Validation evidence was written to `engine/artifacts/goal-5-validation-e1-live.json` and matching markdown latest files
+
+### Validation
+
+- `go test ./...` passes
+- `go build ./...` passes
+- Engine reaches ready state with live market data
+- Engine drops out of ready state when stream freshness is lost
+
+### Status
+
+`Completed`
+
+## Engine Goal E2: Rule Sync Reliability
+
+### What This Achieves
+
+Ensures the engine can load the real saved rules from Supabase consistently and safely without hidden fallback behavior.
+
+### Achieve
+
+- Validate Supabase-backed rule loading end to end
+- Confirm only launch-scope rules are accepted by the engine
+- Make rule-sync failures visible in engine status
+- Keep one source of truth for active live rules
+- Remove ambiguity between static fallback rules and persisted rules during validation runs
+
+### Achieved
+
+- A launch-scope active `stacked_imbalance` validation rule was inserted for the signed-in user in Supabase
+- The engine was run locally with real Supabase credentials instead of static fallback rules
+- Goal 6 live validation passed with `ruleSource: supabase-alert-rules`
+- Engine configured rule count matched Supabase active persisted-rule count
+- Engine reported a successful `lastRuleSyncAt` with no sync error
+- Validation evidence was written to `engine/artifacts/goal-6-validation-e2-live.json` and matching markdown latest files
+
+### Validation
+
+- Engine can load persisted rules from Supabase
+- Rule sync status is visible and accurate
+- Invalid or unsupported rules fail clearly without crashing the engine
+
+### Status
+
+`Completed`
+
+## Engine Goal E3: Evaluator Trustworthiness
+
+### What This Achieves
+
+Proves the first evaluator is consistent enough to earn trader trust before we widen rule coverage.
+
+### Achieve
+
+- Keep focus on one strong evaluator path first
+- Validate `stacked_imbalance` logic against deterministic scenarios
+- Validate duplicate suppression behavior under repeated matching inputs
+- Review thresholds and launch defaults for simplicity and interpretability
+- Capture known limitations explicitly instead of masking them with UI
+
+### Achieved
+
+- Focus remains on one narrow evaluator path: `stacked_imbalance`
+- Focused evaluator, stream, and app test packages all passed
+- Deterministic evaluator tests already prove trigger, rejection, duplicate suppression, and next-bucket behavior
+- Launch defaults remain simple and explainable: `confirmationRows=3`, `thresholdMultiplier=300`
+- Persisted-rule sync validation now proves the evaluator can operate under real Supabase-backed rule loading instead of only static launch rules
+
+### Validation
+
+- Same input produces the same alert decision
+- Duplicate alerts are suppressed correctly
+- Evaluator behavior is explainable from status output and tests
+
+### Status
+
+`Completed`
+
+## Engine Goal E4: Delivery Loop Reliability
+
+### What This Achieves
+
+Closes the real-value loop from engine event to Telegram delivery with clear retry and failure behavior.
+
+### Achieve
+
+- Validate Telegram target lookup from real Supabase data
+- Validate proof rendering for delivered alerts
+- Validate queued, delivered, retrying, and terminal failure states
+- Keep retry policy bounded and observable
+- Ensure delivery failure never silently appears as success
+
+### Achieved
+
+- A live validation alert was triggered through the guarded engine endpoint for the signed-in user
+- Telegram target lookup resolved through real `telegram_connections` data
+- The engine dispatched the alert, persisted lifecycle transitions, and reached `delivered`
+- Engine health output exposed dispatch attempts, persisted writes, and final delivery status
+- Goal 8 live validation passed with real Telegram bot credentials and real Supabase persistence
+
+### Validation
+
+- A triggered alert reaches Telegram
+- Retry behavior is observable and bounded
+- Delivery state in engine status matches actual dispatch outcome
+
+### Status
+
+`Completed`
+
+## Engine Goal E5: History and Proof Integrity
+
+### What This Achieves
+
+Ensures every delivered or attempted alert leaves behind reliable review evidence for users and operators.
+
+### Achieve
+
+- Validate alert history writes to Supabase end to end
+- Validate proof artifact metadata and stored payload shape
+- Confirm history records match engine delivery state transitions
+- Keep persisted history minimal, readable, and reviewable
+
+### Achieved
+
+- The triggered validation alert was observed in `alert_history`
+- Goal 7 live proof validation passed for both engine status and persisted Supabase history
+- Proof artifact metadata, dimensions, media type, and content hash all validated successfully
+- Persisted history now has real proof-bearing alert evidence tied to the signed-in user
+
+### Validation
+
+- Triggered alerts appear in persisted history
+- Proof metadata is present and consistent
+- History state reflects the real lifecycle of each alert
+
+### Status
+
+`Completed`
+
+## Engine Goal E6: Operator Harness and Launch Signoff
+
+### What This Achieves
+
+Gives us one simple operator path to prove the engine is launch-safe without expanding product complexity.
+
+### Achieve
+
+- Keep one-command validation flows for Goals E1 to E5
+- Store validation evidence in stable JSON and markdown artifacts
+- Make launch blockers explicit: stream not ready, rules not synced, delivery not working, history missing
+- Keep frontend surfaces limited to engine setup, readiness, and review
+
+### Achieved
+
+- A clean signoff pass was run with the engine pointed at live Bybit, real Supabase, and the real Telegram bot
+- Goal 5, Goal 6, Goal 7, and Goal 8 validation artifacts were generated in a repeatable operator flow
+- Environment-level warning noise was resolved by correcting `NEXT_PUBLIC_SITE_URL` to the app root URL
+- Final Goal 8 signoff completed without warnings, proving the operator evidence path is now clean and repeatable
+
+### Validation
+
+- We can run a repeatable engine signoff flow
+- Failures produce actionable evidence, not guesswork
+- Launch decisions can be made from the evidence set alone
+
+### Status
+
+`Completed`
+
+## Engine Execution Order
+
+1. `E1` Live engine boot reliability
+2. `E2` Rule sync reliability
+3. `E3` Evaluator trustworthiness
+4. `E4` Delivery loop reliability
+5. `E5` History and proof integrity
+6. `E6` Operator harness and launch signoff
+
+## Current Engine Focus
+
+### Do Now
+
+- Consolidate the engine evidence set for launch signoff
+- Resolve environment-level warning noise such as local site URL drift
+- Keep frontend surfaces limited to setup, status, history, and review
+- Keep the engine runtime contract minimal
+
+### Do Not Do Yet
+
+- expand dashboard UX beyond engine truth
+- add non-essential settings
+- widen rule coverage
+- add new trader-facing polish that does not improve engine validation
+
+## Engine-First UX Constraint
+
+Until Engine Goal E6 is complete, frontend work should stay inside these boundaries:
+
+- auth needed to run the product
+- Telegram pairing needed for delivery
+- rule setup needed for evaluation
+- history and status views needed to verify engine behavior
+- billing only where it directly gates live engine usage
+
+Avoid for now:
+
+- decorative dashboard expansion
+- new navigation complexity
+- advanced personalization
+- broad settings surfaces
+- feature growth not directly tied to engine validation or delivery reliability

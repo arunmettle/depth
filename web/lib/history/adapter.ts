@@ -19,6 +19,7 @@ export function fromEngineRecentAlert(record: EngineRecentAlertRecord): AlertRec
       width: record.proof.width,
     },
     ruleName: record.ruleName,
+    ruleType: record.ruleType,
     side: record.side,
     timeframe: record.timeframe,
     tradePlan: record.tradePlan,

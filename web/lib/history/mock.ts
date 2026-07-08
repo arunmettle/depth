@@ -18,6 +18,7 @@ export const mockHistoryItems: AlertRecord[] = [
       width: 720,
     },
     ruleName: "BTC 1m stacked imbalance",
+    ruleType: "stacked_imbalance",
     side: "buy",
     timeframe: "1m",
     outcome: {
@@ -57,6 +58,7 @@ export const mockHistoryItems: AlertRecord[] = [
       width: 720,
     },
     ruleName: "ETH 5m stacked imbalance",
+    ruleType: "stacked_imbalance",
     side: "sell",
     timeframe: "5m",
     outcome: {
@@ -72,6 +74,46 @@ export const mockHistoryItems: AlertRecord[] = [
       takeProfit1: 3401.9,
       takeProfit2: 3383.65,
       triggerPrice: 3420.15,
+    },
+  },
+  {
+    createdAt: "2026-07-05T06:28:00Z",
+    deliveryStatus: "delivered",
+    id: "alert-3",
+    marketSymbol: "BTCUSDT",
+    message:
+      "BTCUSDT 1m trapped buyers confirmed: failed breakout round-tripped through the prior candle on at least 250000 notional.",
+    proof: {
+      content: sampleProof.replace("BTCUSDT BUY 1m", "BTCUSDT SELL 1m").replace(
+        "#138a5b",
+        "#b64242"
+      ),
+      contentHash: "proof-btc-2",
+      height: 960,
+      mediaType: "image/svg+xml",
+      width: 720,
+    },
+    ruleName: "BTC 1m trapped traders",
+    ruleType: "trapped_traders",
+    side: "sell",
+    timeframe: "1m",
+    outcome: {
+      status: "stop_hit",
+      hitPrice: 64560.2,
+      hitAt: "2026-07-05T06:52:00Z",
+      rMultiple: -1,
+      checkedAt: "2026-07-05T06:55:00Z",
+    },
+    tradePlan: {
+      entryPrice: 64420.1,
+      riskReward1: 1,
+      riskReward2: 2,
+      signalHigh: 64500,
+      signalLow: 64350,
+      stopLoss: 64570.1,
+      takeProfit1: 64270.1,
+      takeProfit2: 64120.1,
+      triggerPrice: 64420.1,
     },
   },
 ];

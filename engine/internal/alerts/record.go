@@ -27,6 +27,7 @@ type Record struct {
 	Message        string              `json:"message"`
 	Proof          proof.Artifact      `json:"proof"`
 	RuleName       string              `json:"ruleName"`
+	RuleType       string              `json:"ruleType"`
 	Side           string              `json:"side"`
 	Timeframe      string              `json:"timeframe"`
 	TradePlan      evaluator.TradePlan `json:"tradePlan"`
@@ -42,6 +43,7 @@ func NewRecord(event evaluator.Event, artifact proof.Artifact) Record {
 		Message:        event.Message,
 		Proof:          artifact,
 		RuleName:       event.RuleName,
+		RuleType:       event.RuleType,
 		Side:           event.Side,
 		Timeframe:      event.Timeframe,
 		TradePlan:      event.TradePlan,
