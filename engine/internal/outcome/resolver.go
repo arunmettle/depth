@@ -38,7 +38,17 @@ const (
 	// after the alert fired before we bother fetching klines for it.
 	defaultMinAge = 2 * time.Minute
 
-	defaultBatchLimit = 25
+	// defaultBatchLimit bounds how many pending alerts we check per pass.
+	// PendingOutcomeAlerts always orders oldest-first, so a small limit
+	// here previously meant a large backlog of old alerts with no
+	// resolvable price history (e.g. predating real-time candle
+	// recording) permanently starved newer, resolvable alerts of ever
+	// being checked at all - they never advanced past the oldest N stuck
+	// in "pending" limbo. Now that resolution reads from our own
+	// self-recorded candle_history table (a cheap internal query, not a
+	// rate-limited external API), we can afford to check far more per
+	// pass so the whole pending queue keeps moving.
+	defaultBatchLimit = 500
 )
 
 // PendingAlert is the minimal trade-plan data needed to resolve a real
