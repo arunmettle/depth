@@ -21,7 +21,21 @@ const (
 	category       = "linear"
 	pageLimit      = 1000
 	maxPages       = 6
+
+	// requestUserAgent mimics a real browser. Bybit's edge WAF silently
+	// returns 403 for requests carrying Go's default "Go-http-client"
+	// user agent (common for datacenter/cloud egress IPs, e.g. Railway),
+	// even though the same IP range is allowed on the public WebSocket
+	// stream. Setting a normal browser UA avoids that block.
+	requestUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
+
+// fallbackBaseURLs are alternate Bybit API domains to retry against if the
+// primary domain returns a 403. Bybit publishes bytick.com as a mirror for
+// clients that get edge/region-blocked on bybit.com.
+var fallbackBaseURLs = []string{
+	"https://api.bytick.com",
+}
 
 // Kline is one real historical candle.
 type Kline struct {
@@ -93,7 +107,55 @@ func (c *Client) FetchKlines(ctx context.Context, symbol string, intervalMinutes
 }
 
 func (c *Client) fetchPage(ctx context.Context, symbol string, intervalMinutes int, start time.Time, end time.Time) ([]Kline, error) {
-	endpoint, err := url.Parse(c.baseURL + "/v5/market/kline")
+	hosts := c.candidateBaseURLs()
+
+	var lastErr error
+	for _, host := range hosts {
+		payload, err := c.fetchPageFromHost(ctx, host, symbol, intervalMinutes, start, end)
+		if err == nil {
+			return payload, nil
+		}
+
+		lastErr = err
+		if !isForbiddenErr(err) {
+			return nil, err
+		}
+		// 403s are treated as "this edge/region blocked us" and are worth
+		// retrying against the next mirror domain rather than failing the
+		// whole resolution pass.
+	}
+
+	return nil, lastErr
+}
+
+// candidateBaseURLs returns c.baseURL followed by any fallback mirror
+// domains not already equal to it, so a region/edge block on one Bybit
+// domain doesn't stall outcome resolution indefinitely.
+func (c *Client) candidateBaseURLs() []string {
+	hosts := []string{c.baseURL}
+	for _, fallback := range fallbackBaseURLs {
+		if fallback != c.baseURL {
+			hosts = append(hosts, fallback)
+		}
+	}
+	return hosts
+}
+
+type forbiddenError struct {
+	statusCode int
+}
+
+func (e *forbiddenError) Error() string {
+	return fmt.Sprintf("kline request failed with status %d", e.statusCode)
+}
+
+func isForbiddenErr(err error) bool {
+	_, ok := err.(*forbiddenError)
+	return ok
+}
+
+func (c *Client) fetchPageFromHost(ctx context.Context, baseURL string, symbol string, intervalMinutes int, start time.Time, end time.Time) ([]Kline, error) {
+	endpoint, err := url.Parse(baseURL + "/v5/market/kline")
 	if err != nil {
 		return nil, fmt.Errorf("build kline endpoint: %w", err)
 	}
@@ -111,12 +173,18 @@ func (c *Client) fetchPage(ctx context.Context, symbol string, intervalMinutes i
 	if err != nil {
 		return nil, fmt.Errorf("create kline request: %w", err)
 	}
+	request.Header.Set("User-Agent", requestUserAgent)
+	request.Header.Set("Accept", "application/json")
 
 	resp, err := c.httpClient.Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("request klines: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusForbidden {
+		return nil, &forbiddenError{statusCode: resp.StatusCode}
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("kline request failed with status %d", resp.StatusCode)

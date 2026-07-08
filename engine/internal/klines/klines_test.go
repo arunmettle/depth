@@ -73,6 +73,57 @@ func TestFetchKlinesRejectsInvalidRange(t *testing.T) {
 	}
 }
 
+func TestFetchKlinesSetsBrowserLikeUserAgent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("User-Agent") == "" || r.Header.Get("User-Agent") == "Go-http-client/1.1" {
+			t.Fatalf("expected a browser-like user agent, got %q", r.Header.Get("User-Agent"))
+		}
+		body := map[string]any{"retCode": 0, "retMsg": "OK", "result": map[string]any{"list": [][]string{}}}
+		_ = json.NewEncoder(w).Encode(body)
+	}))
+	defer server.Close()
+
+	client := &Client{httpClient: server.Client(), baseURL: server.URL}
+
+	if _, err := client.FetchKlines(context.Background(), "BTCUSDT", 1, time.UnixMilli(0).UTC(), time.UnixMilli(60000).UTC()); err != nil {
+		t.Fatalf("fetch klines: %v", err)
+	}
+}
+
+func TestFetchKlinesFallsBackToMirrorDomainOn403(t *testing.T) {
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := map[string]any{
+			"retCode": 0,
+			"retMsg":  "OK",
+			"result": map[string]any{
+				"list": [][]string{
+					{"1000060000", "100", "101", "99.5", "100.5", "10", "1000"},
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(body)
+	}))
+	defer mirror.Close()
+
+	blocked := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer blocked.Close()
+
+	client := &Client{httpClient: blocked.Client(), baseURL: blocked.URL}
+	origFallbacks := fallbackBaseURLs
+	fallbackBaseURLs = []string{mirror.URL}
+	defer func() { fallbackBaseURLs = origFallbacks }()
+
+	got, err := client.FetchKlines(context.Background(), "BTCUSDT", 1, time.UnixMilli(1000000000).UTC(), time.UnixMilli(1000090000).UTC())
+	if err != nil {
+		t.Fatalf("expected fallback domain to succeed after primary 403, got error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 kline from mirror domain, got %d", len(got))
+	}
+}
+
 func TestFetchKlinesReturnsErrorOnRetCode(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body := map[string]any{"retCode": 10001, "retMsg": "invalid symbol", "result": map[string]any{"list": [][]string{}}}
