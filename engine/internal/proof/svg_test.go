@@ -45,10 +45,64 @@ func TestRenderSVGIncludesCoreProofContent(t *testing.T) {
 		`103980.00`,
 		`104120.50`,
 		`Signal range`,
+		`Live Order Book`,
+		`Order book not captured for this alert`,
 	} {
 		if !strings.Contains(svg, expected) {
 			t.Fatalf("expected SVG to contain %q", expected)
 		}
+	}
+}
+
+func TestRenderSVGRendersOrderBookLadderWhenCaptured(t *testing.T) {
+	svg := RenderSVG(Snapshot{
+		Event: evaluator.Event{
+			BucketStart: time.Date(2026, 7, 5, 6, 2, 0, 0, time.UTC),
+			Message:     "BTCUSDT 1m buy stacked imbalance confirmed across 3 candles at 300% threshold.",
+			RuleID:      "rule-1",
+			RuleName:    "BTC 1m stacked imbalance",
+			Side:        "buy",
+			Symbol:      "BTCUSDT",
+			Timeframe:   "1m",
+			TradePlan: evaluator.TradePlan{
+				EntryPrice:   104050.25,
+				StopLoss:     103980,
+				TakeProfit1:  104120.50,
+				TakeProfit2:  104190.75,
+				TriggerPrice: 104050.25,
+			},
+		},
+		Candles: []marketstate.Candle{
+			{BucketStart: time.Date(2026, 7, 5, 6, 0, 0, 0, time.UTC), BuyVolume: 1.0, SellVolume: 0.2, Close: 104000.5, TotalVolume: 1.2},
+			{BucketStart: time.Date(2026, 7, 5, 6, 1, 0, 0, time.UTC), BuyVolume: 1.1, SellVolume: 0.25, Close: 104020.5, TotalVolume: 1.35},
+			{BucketStart: time.Date(2026, 7, 5, 6, 2, 0, 0, time.UTC), BuyVolume: 1.2, SellVolume: 0.3, Close: 104050.25, TotalVolume: 1.5},
+		},
+		OrderBook: marketstate.OrderBookSnapshot{
+			Symbol: "BTCUSDT",
+			Bids: []marketstate.OrderBookLevel{
+				{Price: 104049.50, Size: 1.2},
+				{Price: 104049.00, Size: 0.4},
+			},
+			Asks: []marketstate.OrderBookLevel{
+				{Price: 104050.50, Size: 0.9},
+				{Price: 104051.00, Size: 2.3},
+			},
+		},
+	})
+
+	for _, expected := range []string{
+		`Live Order Book`,
+		`104049.50`,
+		`104050.50`,
+		`Book imbalance:`,
+	} {
+		if !strings.Contains(svg, expected) {
+			t.Fatalf("expected SVG to contain %q", expected)
+		}
+	}
+
+	if strings.Contains(svg, "Order book not captured for this alert") {
+		t.Fatal("expected order book fallback text to be absent when levels are captured")
 	}
 }
 

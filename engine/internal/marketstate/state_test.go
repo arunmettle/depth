@@ -205,3 +205,89 @@ func TestRecentCandlesKeepsOnlyTheMostRecentHistoryWindow(t *testing.T) {
 		t.Fatalf("unexpected newest retained candle: %s", history[len(history)-1].BucketStart)
 	}
 }
+
+func TestOrderBookLevelsReportsMissingBookAsNotReady(t *testing.T) {
+	state := New()
+
+	_, ok := state.OrderBookLevels("BTCUSDT", 5)
+	if ok {
+		t.Fatal("expected no order book to be reported before any snapshot is applied")
+	}
+}
+
+func TestApplyOrderBookSnapshotSortsAndLimitsDepth(t *testing.T) {
+	state := New()
+
+	state.ApplyOrderBookSnapshot("BTCUSDT", []OrderBookLevel{
+		{Price: 104000, Size: 1.5},
+		{Price: 104010, Size: 2.5},
+		{Price: 103990, Size: 0.5},
+	}, []OrderBookLevel{
+		{Price: 104030, Size: 1.0},
+		{Price: 104020, Size: 3.0},
+		{Price: 104040, Size: 0.75},
+	})
+
+	snapshot, ok := state.OrderBookLevels("BTCUSDT", 2)
+	if !ok {
+		t.Fatal("expected order book snapshot to be available")
+	}
+
+	if len(snapshot.Bids) != 2 || snapshot.Bids[0].Price != 104010 || snapshot.Bids[1].Price != 104000 {
+		t.Fatalf("expected top 2 bids sorted by price descending, got %+v", snapshot.Bids)
+	}
+
+	if len(snapshot.Asks) != 2 || snapshot.Asks[0].Price != 104020 || snapshot.Asks[1].Price != 104030 {
+		t.Fatalf("expected top 2 asks sorted by price ascending, got %+v", snapshot.Asks)
+	}
+}
+
+func TestApplyOrderBookDeltaUpdatesAndRemovesLevels(t *testing.T) {
+	state := New()
+
+	state.ApplyOrderBookSnapshot("BTCUSDT", []OrderBookLevel{
+		{Price: 104000, Size: 1.5},
+		{Price: 103990, Size: 0.5},
+	}, []OrderBookLevel{
+		{Price: 104010, Size: 1.0},
+	})
+
+	state.ApplyOrderBookDelta("BTCUSDT", []OrderBookLevel{
+		{Price: 104000, Size: 0}, // removed
+		{Price: 103980, Size: 2.0}, // new level
+	}, []OrderBookLevel{
+		{Price: 104010, Size: 4.5}, // updated size
+	})
+
+	snapshot, ok := state.OrderBookLevels("BTCUSDT", 10)
+	if !ok {
+		t.Fatal("expected order book snapshot to be available")
+	}
+
+	if len(snapshot.Bids) != 2 {
+		t.Fatalf("expected 2 remaining bid levels, got %+v", snapshot.Bids)
+	}
+
+	if snapshot.Bids[0].Price != 103990 || snapshot.Bids[1].Price != 103980 {
+		t.Fatalf("unexpected bid levels after delta: %+v", snapshot.Bids)
+	}
+
+	if len(snapshot.Asks) != 1 || snapshot.Asks[0].Size != 4.5 {
+		t.Fatalf("expected updated ask size, got %+v", snapshot.Asks)
+	}
+}
+
+func TestApplyOrderBookDeltaBeforeSnapshotStillBuildsBook(t *testing.T) {
+	state := New()
+
+	state.ApplyOrderBookDelta("BTCUSDT", []OrderBookLevel{{Price: 104000, Size: 1.0}}, nil)
+
+	snapshot, ok := state.OrderBookLevels("BTCUSDT", 10)
+	if !ok {
+		t.Fatal("expected order book to exist after delta-only updates")
+	}
+
+	if len(snapshot.Bids) != 1 || snapshot.Bids[0].Price != 104000 {
+		t.Fatalf("unexpected bids from delta-only book: %+v", snapshot.Bids)
+	}
+}

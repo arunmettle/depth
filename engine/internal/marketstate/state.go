@@ -25,6 +25,29 @@ type Trade struct {
 	Timestamp time.Time
 }
 
+// OrderBookLevel is a single resting price level on one side of the book.
+type OrderBookLevel struct {
+	Price float64 `json:"price"`
+	Size  float64 `json:"size"`
+}
+
+// OrderBookSnapshot is a point-in-time read of the top levels of a symbol's
+// order book, ready for display. Bids are sorted best (highest price) first;
+// asks are sorted best (lowest price) first.
+type OrderBookSnapshot struct {
+	Symbol string           `json:"symbol"`
+	Bids   []OrderBookLevel `json:"bids"`
+	Asks   []OrderBookLevel `json:"asks"`
+}
+
+// orderBook holds the live resting size at each price level for one symbol,
+// keyed by price. It is built from a Bybit v5 orderbook snapshot message and
+// kept current with delta messages.
+type orderBook struct {
+	bids map[float64]float64
+	asks map[float64]float64
+}
+
 type Candle struct {
 	BucketStart time.Time `json:"bucketStart"`
 	BuyVolume   float64   `json:"buyVolume"`
@@ -44,6 +67,7 @@ type State struct {
 	candles      map[string]map[string]Candle
 	history      map[string]map[string][]Candle
 	historyLimit int
+	orderBooks   map[string]*orderBook
 }
 
 func New() *State {
@@ -51,6 +75,7 @@ func New() *State {
 		candles:      make(map[string]map[string]Candle),
 		history:      make(map[string]map[string][]Candle),
 		historyLimit: 20,
+		orderBooks:   make(map[string]*orderBook),
 	}
 }
 
@@ -178,4 +203,89 @@ func (s *State) appendHistory(symbol string, timeframe string, candle Candle) {
 func bucketStart(timestamp time.Time, window time.Duration) time.Time {
 	utc := timestamp.UTC()
 	return utc.Truncate(window)
+}
+
+// ApplyOrderBookSnapshot replaces the entire resting book for a symbol. Bybit
+// sends a fresh snapshot on initial subscribe and whenever it needs the
+// client to reset its local book (e.g. after a service restart).
+func (s *State) ApplyOrderBookSnapshot(symbol string, bids []OrderBookLevel, asks []OrderBookLevel) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	book := &orderBook{
+		bids: make(map[float64]float64, len(bids)),
+		asks: make(map[float64]float64, len(asks)),
+	}
+
+	applyOrderBookLevels(book.bids, bids)
+	applyOrderBookLevels(book.asks, asks)
+
+	s.orderBooks[symbol] = book
+}
+
+// ApplyOrderBookDelta merges incremental changes into a symbol's resting
+// book. A level with size 0 means that price has been fully filled or
+// cancelled and should be removed.
+func (s *State) ApplyOrderBookDelta(symbol string, bids []OrderBookLevel, asks []OrderBookLevel) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	book, ok := s.orderBooks[symbol]
+	if !ok {
+		book = &orderBook{bids: make(map[float64]float64), asks: make(map[float64]float64)}
+		s.orderBooks[symbol] = book
+	}
+
+	applyOrderBookLevels(book.bids, bids)
+	applyOrderBookLevels(book.asks, asks)
+}
+
+func applyOrderBookLevels(side map[float64]float64, levels []OrderBookLevel) {
+	for _, level := range levels {
+		if level.Size <= 0 {
+			delete(side, level.Price)
+			continue
+		}
+
+		side[level.Price] = level.Size
+	}
+}
+
+// OrderBookLevels returns the top `depth` resting levels on each side of a
+// symbol's book, ordered best-price-first. It reports false when no book has
+// been received yet for the symbol.
+func (s *State) OrderBookLevels(symbol string, depth int) (OrderBookSnapshot, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	book, ok := s.orderBooks[symbol]
+	if !ok || (len(book.bids) == 0 && len(book.asks) == 0) {
+		return OrderBookSnapshot{}, false
+	}
+
+	bids := sortedOrderBookLevels(book.bids, depth, true)
+	asks := sortedOrderBookLevels(book.asks, depth, false)
+
+	return OrderBookSnapshot{Symbol: symbol, Bids: bids, Asks: asks}, true
+}
+
+func sortedOrderBookLevels(side map[float64]float64, depth int, descending bool) []OrderBookLevel {
+	levels := make([]OrderBookLevel, 0, len(side))
+	for price, size := range side {
+		levels = append(levels, OrderBookLevel{Price: price, Size: size})
+	}
+
+	sort.Slice(levels, func(left, right int) bool {
+		if descending {
+			return levels[left].Price > levels[right].Price
+		}
+
+		return levels[left].Price < levels[right].Price
+	})
+
+	if depth > 0 && len(levels) > depth {
+		levels = levels[:depth]
+	}
+
+	return levels
 }

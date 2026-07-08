@@ -11,8 +11,9 @@ import (
 )
 
 type Snapshot struct {
-	Candles []marketstate.Candle
-	Event   evaluator.Event
+	Candles   []marketstate.Candle
+	Event     evaluator.Event
+	OrderBook marketstate.OrderBookSnapshot
 }
 
 func RenderSVG(snapshot Snapshot) string {
@@ -31,7 +32,7 @@ func RenderSVG(snapshot Snapshot) string {
 
 	builder.WriteString(fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d" role="img" aria-label="Sentinel Flow proof snapshot">`, width, height, width, height))
 	builder.WriteString(`<rect width="100%" height="100%" fill="#f4efe6"/>`)
-	builder.WriteString(`<rect x="32" y="32" width="656" height="976" rx="28" fill="#fffaf2" stroke="#d9cdb8" stroke-width="2"/>`)
+	builder.WriteString(`<rect x="32" y="32" width="656" height="1360" rx="28" fill="#fffaf2" stroke="#d9cdb8" stroke-width="2"/>`)
 	builder.WriteString(`<text x="56" y="84" font-family="'Segoe UI', Arial, sans-serif" font-size="18" fill="#766956">Sentinel Flow Proof</text>`)
 	builder.WriteString(fmt.Sprintf(`<text x="56" y="132" font-family="'Segoe UI', Arial, sans-serif" font-size="34" font-weight="700" fill="#1f1a14">%s %s %s</text>`,
 		escape(snapshot.Event.Symbol),
@@ -57,12 +58,20 @@ func RenderSVG(snapshot Snapshot) string {
 	builder.WriteString(metricTile(376, 600, 132, 70, "TP1", formatPrice(snapshot.Event.TradePlan.TakeProfit1)))
 	builder.WriteString(metricTile(524, 600, 116, 70, "TP2", formatPrice(snapshot.Event.TradePlan.TakeProfit2)))
 
-	builder.WriteString(`<text x="56" y="734" font-family="'Segoe UI', Arial, sans-serif" font-size="22" font-weight="700" fill="#2e261d">Setup Context</text>`)
-	builder.WriteString(fullWidthMetricRow(56, 764, 608, "Rule", snapshot.Event.RuleName))
-	builder.WriteString(fullWidthMetricRow(56, 838, 608, "Signal range", formatSignalRange(snapshot.Event.TradePlan)))
-	builder.WriteString(fullWidthMetricRow(56, 900, 608, "Window bias", fmt.Sprintf("%s (%s)", window.DominantSummary, window.RatioSummary)))
+	const orderBookBoxY = 704
+	const orderBookBoxHeight = 336
+	builder.WriteString(fmt.Sprintf(`<rect x="56" y="%d" width="608" height="%d" rx="22" fill="#f7f1e6" stroke="#e0d5c3" stroke-width="2"/>`, orderBookBoxY, orderBookBoxHeight))
+	builder.WriteString(fmt.Sprintf(`<text x="80" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="20" font-weight="700" fill="#2e261d">Live Order Book</text>`, orderBookBoxY+38))
+	builder.WriteString(fmt.Sprintf(`<text x="80" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="14" fill="#7a6c59">Resting bid/ask depth captured from Bybit at signal time (top %d levels each side).</text>`, orderBookBoxY+58, orderBookLadderDisplayDepth))
+	builder.WriteString(renderOrderBookLadder(snapshot.OrderBook, 80, orderBookBoxY+74, 560, orderBookBoxHeight-88))
 
-	builder.WriteString(`<text x="56" y="984" font-family="'Segoe UI', Arial, sans-serif" font-size="16" fill="#7a6c59">Mobile setup card: the strip shows dominance, the plan shows invalidation, and the bottom explains the signal.</text>`)
+	setupContextTitleY := orderBookBoxY + orderBookBoxHeight + 46
+	builder.WriteString(fmt.Sprintf(`<text x="56" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="22" font-weight="700" fill="#2e261d">Setup Context</text>`, setupContextTitleY))
+	builder.WriteString(fullWidthMetricRow(56, setupContextTitleY+30, 608, "Rule", snapshot.Event.RuleName))
+	builder.WriteString(fullWidthMetricRow(56, setupContextTitleY+104, 608, "Signal range", formatSignalRange(snapshot.Event.TradePlan)))
+	builder.WriteString(fullWidthMetricRow(56, setupContextTitleY+166, 608, "Window bias", fmt.Sprintf("%s (%s)", window.DominantSummary, window.RatioSummary)))
+
+	builder.WriteString(renderWrappedText(56, setupContextTitleY+250, 16, "#7a6c59", "Mobile setup card: the strip shows dominance, the book shows real resting liquidity, and the plan shows invalidation.", 74, 22))
 	builder.WriteString(`</svg>`)
 
 	return builder.String()
@@ -106,6 +115,117 @@ func metricTile(x int, y int, width int, height int, label string, value string)
 		y+62,
 		escape(value),
 	)
+}
+
+// orderBookLadderDisplayDepth is how many resting levels per side we render
+// in the proof's order book ladder.
+const orderBookLadderDisplayDepth = 5
+
+// renderOrderBookLadder draws a compact DOM-style price ladder from a real
+// order book snapshot: worse asks at the top, the best ask just above the
+// midline, then the best bid just below the midline down to the worst bid.
+// Bar length is proportional to resting size at that level, scaled against
+// the largest level shown, so it reflects genuine liquidity rather than a
+// fabricated heatmap.
+func renderOrderBookLadder(book marketstate.OrderBookSnapshot, x int, y int, width int, height int) string {
+	var builder strings.Builder
+
+	builder.WriteString(fmt.Sprintf(`<rect x="%d" y="%d" width="%d" height="%d" rx="16" fill="#fffaf2" stroke="#e6dccd" stroke-width="1"/>`, x, y, width, height))
+
+	if len(book.Bids) == 0 && len(book.Asks) == 0 {
+		builder.WriteString(fmt.Sprintf(`<text x="%d" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="16" fill="#7a6c59">Order book not captured for this alert</text>`, x+16, y+38))
+		return builder.String()
+	}
+
+	asks := book.Asks
+	if len(asks) > orderBookLadderDisplayDepth {
+		asks = asks[:orderBookLadderDisplayDepth]
+	}
+	bids := book.Bids
+	if len(bids) > orderBookLadderDisplayDepth {
+		bids = bids[:orderBookLadderDisplayDepth]
+	}
+
+	maxSize := 0.0
+	var totalBidSize, totalAskSize float64
+	for _, level := range bids {
+		if level.Size > maxSize {
+			maxSize = level.Size
+		}
+		totalBidSize += level.Size
+	}
+	for _, level := range asks {
+		if level.Size > maxSize {
+			maxSize = level.Size
+		}
+		totalAskSize += level.Size
+	}
+	if maxSize <= 0 {
+		maxSize = 1
+	}
+
+	const rowPitch = 22
+	const priceColumnX = 16
+	const barStartOffset = 96
+	barMaxWidth := width - barStartOffset - 96
+
+	rowY := y + 16
+
+	// Worse (higher) asks render first so the best ask lands just above the
+	// midline, matching a real DOM ladder.
+	for index := len(asks) - 1; index >= 0; index-- {
+		level := asks[index]
+		builder.WriteString(renderOrderBookRow(x, rowY, priceColumnX, barStartOffset, barMaxWidth, maxSize, level, "#b64242"))
+		rowY += rowPitch
+	}
+
+	builder.WriteString(fmt.Sprintf(`<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#d9cdb8" stroke-width="1"/>`, x+8, rowY+2, x+width-8, rowY+2))
+	builder.WriteString(fmt.Sprintf(`<text x="%d" y="%d" text-anchor="end" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#7a6c59">%s</text>`, x+width-8, rowY+18, escape(orderBookImbalanceLabel(totalBidSize, totalAskSize))))
+	rowY += 26
+
+	// Best bid renders first so it lands just below the midline, decreasing
+	// in price further down the ladder.
+	for _, level := range bids {
+		builder.WriteString(renderOrderBookRow(x, rowY, priceColumnX, barStartOffset, barMaxWidth, maxSize, level, "#138a5b"))
+		rowY += rowPitch
+	}
+
+	return builder.String()
+}
+
+func renderOrderBookRow(x int, y int, priceColumnX int, barStartOffset int, barMaxWidth int, maxSize float64, level marketstate.OrderBookLevel, color string) string {
+	barWidth := int(float64(barMaxWidth) * (level.Size / maxSize))
+	if barWidth < 2 {
+		barWidth = 2
+	}
+
+	return fmt.Sprintf(
+		`<text x="%d" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="13" font-weight="700" fill="#2e261d">%s</text><rect x="%d" y="%d" width="%d" height="12" rx="6" fill="%s" fill-opacity="0.85"/><text x="%d" y="%d" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#7a6c59">%s</text>`,
+		x+priceColumnX,
+		y,
+		escape(formatPrice(level.Price)),
+		x+barStartOffset,
+		y-10,
+		barWidth,
+		color,
+		x+barStartOffset+barWidth+8,
+		y,
+		escape(formatNumber(level.Size)),
+	)
+}
+
+func orderBookImbalanceLabel(totalBidSize float64, totalAskSize float64) string {
+	total := totalBidSize + totalAskSize
+	if total <= 0 {
+		return "Book imbalance: N/A"
+	}
+
+	bidShare := (totalBidSize / total) * 100
+	if bidShare >= 50 {
+		return fmt.Sprintf("Book imbalance: %.0f%% bid", bidShare)
+	}
+
+	return fmt.Sprintf("Book imbalance: %.0f%% ask", 100-bidShare)
 }
 
 func renderFlowStrip(candles []marketstate.Candle, x int, y int, width int, height int) string {

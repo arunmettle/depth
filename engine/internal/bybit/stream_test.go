@@ -24,8 +24,8 @@ import (
 func TestBuildTopics(t *testing.T) {
 	topics := buildTopics([]string{"BTCUSDT", "ETHUSDT"})
 
-	if len(topics) != 2 {
-		t.Fatalf("expected 2 topics, got %d", len(topics))
+	if len(topics) != 4 {
+		t.Fatalf("expected 4 topics, got %d", len(topics))
 	}
 
 	if topics[0] != "publicTrade.BTCUSDT" {
@@ -34,6 +34,14 @@ func TestBuildTopics(t *testing.T) {
 
 	if topics[1] != "publicTrade.ETHUSDT" {
 		t.Fatalf("unexpected second topic: %s", topics[1])
+	}
+
+	if topics[2] != "orderbook.50.BTCUSDT" {
+		t.Fatalf("unexpected third topic: %s", topics[2])
+	}
+
+	if topics[3] != "orderbook.50.ETHUSDT" {
+		t.Fatalf("unexpected fourth topic: %s", topics[3])
 	}
 }
 
@@ -221,6 +229,59 @@ func TestSetRulesUpdatesEvaluatorStatus(t *testing.T) {
 
 	if status.Evaluator.LastRuleSyncAt.IsZero() {
 		t.Fatalf("expected last rule sync time to be set")
+	}
+}
+
+func TestProcessOrderBookEnvelopeAppliesSnapshotAndDelta(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	stream := NewPublicTradeStream(config.Config{
+		BybitSymbols: []string{"BTCUSDT"},
+	}, logger)
+
+	stream.processOrderBookEnvelope(orderBookEnvelope{
+		Topic: "orderbook.50.BTCUSDT",
+		Type:  "snapshot",
+		Data: orderBookData{
+			Symbol: "BTCUSDT",
+			Bids:   [][]string{{"104000.00", "1.5"}, {"103990.00", "0.5"}},
+			Asks:   [][]string{{"104010.00", "1.0"}, {"104020.00", "2.0"}},
+		},
+	})
+
+	book, ok := stream.marketState.OrderBookLevels("BTCUSDT", 5)
+	if !ok {
+		t.Fatal("expected order book snapshot to be applied")
+	}
+
+	if len(book.Bids) != 2 || book.Bids[0].Price != 104000 {
+		t.Fatalf("unexpected bids after snapshot: %+v", book.Bids)
+	}
+
+	if len(book.Asks) != 2 || book.Asks[0].Price != 104010 {
+		t.Fatalf("unexpected asks after snapshot: %+v", book.Asks)
+	}
+
+	stream.processOrderBookEnvelope(orderBookEnvelope{
+		Topic: "orderbook.50.BTCUSDT",
+		Type:  "delta",
+		Data: orderBookData{
+			Symbol: "BTCUSDT",
+			Bids:   [][]string{{"104000.00", "0"}},
+			Asks:   [][]string{{"104010.00", "5.5"}},
+		},
+	})
+
+	book, ok = stream.marketState.OrderBookLevels("BTCUSDT", 5)
+	if !ok {
+		t.Fatal("expected order book to remain available after delta")
+	}
+
+	if len(book.Bids) != 1 || book.Bids[0].Price != 103990 {
+		t.Fatalf("expected removed bid level to disappear, got %+v", book.Bids)
+	}
+
+	if book.Asks[0].Size != 5.5 {
+		t.Fatalf("expected updated ask size, got %+v", book.Asks)
 	}
 }
 

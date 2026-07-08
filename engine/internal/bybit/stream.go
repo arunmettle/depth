@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -120,6 +121,31 @@ type publicTrade struct {
 	Size      string `json:"v"`
 	Symbol    string `json:"s"`
 	Timestamp int64  `json:"T"`
+}
+
+// orderBookDepth is the Bybit v5 depth tier we subscribe to for the linear
+// category. Level 50 gives enough resting levels to build a real price
+// ladder while staying on the free public feed.
+const orderBookDepth = 50
+
+// orderBookLadderDepth is how many levels per side we keep for display once
+// a book snapshot is captured for a proof render.
+const orderBookLadderDepth = 5
+
+type topicEnvelope struct {
+	Topic string `json:"topic"`
+}
+
+type orderBookEnvelope struct {
+	Topic string        `json:"topic"`
+	Type  string        `json:"type"`
+	Data  orderBookData `json:"data"`
+}
+
+type orderBookData struct {
+	Symbol string     `json:"s"`
+	Bids   [][]string `json:"b"`
+	Asks   [][]string `json:"a"`
 }
 
 type ValidationAlertInput struct {
@@ -361,24 +387,47 @@ func (s *PublicTradeStream) readLoop(ctx context.Context, connection *websocket.
 
 		s.recordMessage()
 
-		var envelope publicTradeEnvelope
-		if err := json.Unmarshal(payload, &envelope); err != nil {
+		var topic topicEnvelope
+		if err := json.Unmarshal(payload, &topic); err != nil {
 			continue
 		}
 
-		if envelope.Topic == "" {
-			continue
-		}
+		switch {
+		case strings.HasPrefix(topic.Topic, "publicTrade."):
+			var envelope publicTradeEnvelope
+			if err := json.Unmarshal(payload, &envelope); err != nil {
+				continue
+			}
 
-		s.processEnvelope(envelope)
+			if envelope.Topic == "" {
+				continue
+			}
+
+			s.processEnvelope(envelope)
+		case strings.HasPrefix(topic.Topic, "orderbook."):
+			var envelope orderBookEnvelope
+			if err := json.Unmarshal(payload, &envelope); err != nil {
+				continue
+			}
+
+			if envelope.Topic == "" {
+				continue
+			}
+
+			s.processOrderBookEnvelope(envelope)
+		}
 	}
 }
 
 func buildTopics(symbols []string) []string {
-	topics := make([]string, 0, len(symbols))
+	topics := make([]string, 0, len(symbols)*2)
 
 	for _, symbol := range symbols {
 		topics = append(topics, "publicTrade."+symbol)
+	}
+
+	for _, symbol := range symbols {
+		topics = append(topics, fmt.Sprintf("orderbook.%d.%s", orderBookDepth, symbol))
 	}
 
 	return topics
@@ -392,6 +441,42 @@ func buildSymbolStates(symbols []string) []SymbolState {
 	}
 
 	return items
+}
+
+func (s *PublicTradeStream) processOrderBookEnvelope(envelope orderBookEnvelope) {
+	if envelope.Data.Symbol == "" {
+		return
+	}
+
+	bids := normalizeOrderBookLevels(envelope.Data.Bids)
+	asks := normalizeOrderBookLevels(envelope.Data.Asks)
+
+	if envelope.Type == "snapshot" {
+		s.marketState.ApplyOrderBookSnapshot(envelope.Data.Symbol, bids, asks)
+		return
+	}
+
+	s.marketState.ApplyOrderBookDelta(envelope.Data.Symbol, bids, asks)
+}
+
+func normalizeOrderBookLevels(raw [][]string) []marketstate.OrderBookLevel {
+	levels := make([]marketstate.OrderBookLevel, 0, len(raw))
+
+	for _, entry := range raw {
+		if len(entry) != 2 {
+			continue
+		}
+
+		price, priceErr := strconv.ParseFloat(entry[0], 64)
+		size, sizeErr := strconv.ParseFloat(entry[1], 64)
+		if priceErr != nil || sizeErr != nil {
+			continue
+		}
+
+		levels = append(levels, marketstate.OrderBookLevel{Price: price, Size: size})
+	}
+
+	return levels
 }
 
 func (s *PublicTradeStream) processEnvelope(envelope publicTradeEnvelope) {
@@ -536,9 +621,12 @@ func (s *PublicTradeStream) renderProof(rule evaluator.Rule, event evaluator.Eve
 		candles = candles[len(candles)-window:]
 	}
 
+	orderBook, _ := s.marketState.OrderBookLevels(rule.MarketSymbol, orderBookLadderDepth)
+
 	return proof.NewSVGArtifact(proof.RenderSVG(proof.Snapshot{
-		Candles: candles,
-		Event:   event,
+		Candles:   candles,
+		Event:     event,
+		OrderBook: orderBook,
 	}))
 }
 

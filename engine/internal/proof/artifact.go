@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	DefaultHeight = 1040
+	DefaultHeight = 1424
 	DefaultWidth  = 720
 	SVGMediaType  = "image/svg+xml"
 )
