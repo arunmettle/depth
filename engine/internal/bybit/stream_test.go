@@ -17,6 +17,7 @@ import (
 	"sentinelflow/engine/internal/alerts"
 	"sentinelflow/engine/internal/config"
 	"sentinelflow/engine/internal/evaluator"
+	"sentinelflow/engine/internal/marketstate"
 	"sentinelflow/engine/internal/proof"
 	"sentinelflow/engine/internal/telegram"
 )
@@ -609,6 +610,63 @@ func TestTriggerValidationAlertCreatesEvaluatedRecord(t *testing.T) {
 	status := stream.Status()
 	if len(status.Evaluator.RecentAlerts) != 1 {
 		t.Fatalf("expected validation alert to be recorded, got %d records", len(status.Evaluator.RecentAlerts))
+	}
+}
+
+// TestTriggerValidationAlertEnrichesWithRealMarketState ensures the
+// validation endpoint's proof is not always an empty shell: when the engine
+// already has real live candles and order book state for the requested
+// symbol/timeframe, the validation alert should surface them (and a
+// genuinely derived trade plan) instead of leaving the flow strip, trade
+// plan, and order book sections blank.
+func TestTriggerValidationAlertEnrichesWithRealMarketState(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	stream := NewPublicTradeStream(config.Config{
+		BybitSymbols: []string{"BTCUSDT"},
+	}, logger)
+
+	payload, err := json.Marshal(publicTrade{
+		Price:     "104523.5",
+		Side:      "Buy",
+		Size:      "0.125",
+		Symbol:    "BTCUSDT",
+		Timestamp: time.Now().UnixMilli(),
+	})
+	if err != nil {
+		t.Fatalf("marshal trade payload: %v", err)
+	}
+
+	stream.processEnvelope(publicTradeEnvelope{
+		Topic: "publicTrade.BTCUSDT",
+		Data:  []json.RawMessage{payload},
+	})
+
+	stream.marketState.ApplyOrderBookSnapshot(
+		"BTCUSDT",
+		[]marketstate.OrderBookLevel{{Price: 104500, Size: 1.5}},
+		[]marketstate.OrderBookLevel{{Price: 104550, Size: 1.2}},
+	)
+
+	record, err := stream.TriggerValidationAlert(ValidationAlertInput{
+		MarketSymbol: "BTCUSDT",
+		Side:         "buy",
+		Timeframe:    "1m",
+		UserID:       "user-5",
+	})
+	if err != nil {
+		t.Fatalf("trigger validation alert: %v", err)
+	}
+
+	if !strings.Contains(record.Proof.Content, "104500") {
+		t.Fatalf("expected proof to include real order book levels, got: %s", record.Proof.Content)
+	}
+
+	if strings.Contains(record.Proof.Content, "No candle window available") {
+		t.Fatal("expected proof to include a real candle window, not the empty-state message")
+	}
+
+	if record.TradePlan.EntryPrice <= 0 {
+		t.Fatalf("expected a real trade plan to be derived, got: %+v", record.TradePlan)
 	}
 }
 

@@ -989,7 +989,33 @@ func (s *PublicTradeStream) TriggerValidationAlert(input ValidationAlertInput) (
 		UserID:      input.UserID,
 	}
 
-	artifact := proof.NewSVGArtifact(proof.RenderSVG(proof.Snapshot{Event: event}))
+	// Pull whatever real market state is currently available for this
+	// symbol/timeframe so the validation proof looks like a genuine alert
+	// (flow strip, trade plan, order book) instead of an empty shell. This
+	// is still real live data - never fabricated - it is simply evaluated
+	// outside of a configured rule's confirmation trigger.
+	snapshot := proof.Snapshot{Event: event}
+
+	const validationConfirmationWindow = 3
+	if current, ok := s.marketState.CurrentCandle(input.MarketSymbol, input.Timeframe); ok {
+		recent := s.marketState.RecentCandles(input.MarketSymbol, input.Timeframe, validationConfirmationWindow-1)
+		candles := append(recent, current)
+		if len(candles) > validationConfirmationWindow {
+			candles = candles[len(candles)-validationConfirmationWindow:]
+		}
+		snapshot.Candles = candles
+
+		if tradePlan, ok := evaluator.BuildTradePlan(candles, input.Side); ok {
+			event.TradePlan = tradePlan
+			snapshot.Event = event
+		}
+	}
+
+	if orderBook, ok := s.marketState.OrderBookLevels(input.MarketSymbol, orderBookLadderDepth); ok {
+		snapshot.OrderBook = orderBook
+	}
+
+	artifact := proof.NewSVGArtifact(proof.RenderSVG(snapshot))
 	record := alerts.NewRecord(event, artifact)
 	s.recordAndDispatchAlert(record)
 

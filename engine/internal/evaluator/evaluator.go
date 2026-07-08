@@ -128,7 +128,7 @@ func (e *Evaluator) Evaluate(rule Rule) (*Event, bool) {
 		return nil, false
 	}
 
-	tradePlan, ok := buildTradePlan(window, side)
+	tradePlan, ok := BuildTradePlan(window, side)
 	if !ok {
 		return nil, false
 	}
@@ -210,7 +210,11 @@ func imbalanceRatio(dominant float64, opposing float64) float64 {
 	return dominant / opposing
 }
 
-func buildTradePlan(candles []marketstate.Candle, side string) (TradePlan, bool) {
+// BuildTradePlan derives entry/stop/target levels from a real confirmation
+// candle window using the same conservative sizing the live evaluator uses,
+// so callers such as the validation alert endpoint can produce a realistic
+// trade plan instead of a fabricated one.
+func BuildTradePlan(candles []marketstate.Candle, side string) (TradePlan, bool) {
 	if len(candles) == 0 {
 		return TradePlan{}, false
 	}
