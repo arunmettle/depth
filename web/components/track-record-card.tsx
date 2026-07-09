@@ -42,7 +42,6 @@ function buildSparklinePath(values: number[], width: number, height: number) {
 
 export function TrackRecordCard({ items }: TrackRecordCardProps) {
   const summary = summarizeTrackRecord(items);
-  const byRuleType = summarizeTrackRecordByRuleType(items);
   const curveValues = summary.equityCurve.map((point) => point.cumulativeR);
   const path = buildSparklinePath(curveValues, 280, 72);
   const hasResolvedAlerts = summary.resolvedCount > 0;
@@ -52,6 +51,11 @@ export function TrackRecordCard({ items }: TrackRecordCardProps) {
   const hasPreFixData = preFix.length > 0;
   const isPostFixSampleTrustworthy =
     postFixSummary.resolvedCount >= MINIMUM_TRUSTWORTHY_SAMPLE_SIZE;
+  // Once pre-fix data exists, the per-rule breakdown should reflect current
+  // strategy performance only - otherwise legacy tiny-stop alerts (see
+  // docs/PROFITABILITY_AFTER_COSTS.md) drag these figures far more negative
+  // than what each rule is actually doing today.
+  const byRuleType = summarizeTrackRecordByRuleType(hasPreFixData ? postFix : items);
 
   return (
     <Card>
@@ -188,12 +192,15 @@ export function TrackRecordCard({ items }: TrackRecordCardProps) {
       </CardContent>
       {byRuleType.length > 1 ? (
         <CardContent className="grid gap-3 border-t border-border pt-6 md:grid-cols-2">
+          <p className="col-span-full text-xs font-medium text-muted-foreground">
+            Per-rule breakdown{hasPreFixData ? " (post-fix only)" : ""}
+          </p>
           {byRuleType.map(({ ruleType, summary: ruleSummary }) => (
             <div key={ruleType} className="rounded-xl border border-border bg-background p-4">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-medium">{getRuleTypeLabel(ruleType)}</p>
                 <Badge variant={ruleSummary.resolvedCount > 0 ? "default" : "secondary"}>
-                  {ruleSummary.resolvedCount} resolved
+                  {ruleSummary.resolvedCount} resolved{hasPreFixData ? " post-fix" : ""}
                 </Badge>
               </div>
               <div className="mt-3 grid grid-cols-3 gap-3">
