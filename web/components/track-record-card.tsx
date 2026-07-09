@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getRuleTypeLabel } from "@/lib/history/presentation";
 import { summarizeTrackRecord, summarizeTrackRecordByRuleType } from "@/lib/history/track-record";
+import { REALISTIC_ROUND_TRIP_COST_PERCENT } from "@/lib/history/trading-costs";
 import type { AlertRecord } from "@/lib/history/schema";
 
 type TrackRecordCardProps = {
@@ -55,7 +56,8 @@ export function TrackRecordCard({ items }: TrackRecordCardProps) {
         <CardDescription>
           Whether each alert&apos;s stop-loss or take-profit level was actually touched
           afterward, checked against real Bybit historical price data - not a simulation
-          or an estimate.
+          or an estimate. Net R assumes {REALISTIC_ROUND_TRIP_COST_PERCENT}% round-trip
+          trading costs (fees + slippage).
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-4">
@@ -73,7 +75,9 @@ export function TrackRecordCard({ items }: TrackRecordCardProps) {
           <p className="mt-1 text-2xl font-semibold tracking-tight">
             {summary.averageRMultiple === null ? "—" : formatSignedR(summary.averageRMultiple)}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">Per resolved alert</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Net: {summary.netAverageRMultiple === null ? "—" : formatSignedR(summary.netAverageRMultiple)} per resolved alert
+          </p>
         </div>
         <div className="rounded-xl border border-border bg-background p-4">
           <p className="text-xs font-medium text-muted-foreground">Still tracking</p>
@@ -86,6 +90,9 @@ export function TrackRecordCard({ items }: TrackRecordCardProps) {
           <p className="text-xs font-medium text-muted-foreground">Cumulative R</p>
           <p className="mt-1 text-2xl font-semibold tracking-tight">
             {formatSignedR(summary.totalRMultiple)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Net: {summary.netTotalRMultiple === null ? "—" : formatSignedR(summary.netTotalRMultiple)}
           </p>
           {path ? (
             <svg
@@ -129,17 +136,27 @@ export function TrackRecordCard({ items }: TrackRecordCardProps) {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Avg R</p>
+                  <p className="text-xs text-muted-foreground">Avg R (net)</p>
                   <p className="text-lg font-semibold tracking-tight">
                     {ruleSummary.averageRMultiple === null
                       ? "—"
                       : formatSignedR(ruleSummary.averageRMultiple)}
                   </p>
+                  <p className="text-xs text-muted-foreground">
+                    {ruleSummary.netAverageRMultiple === null
+                      ? "—"
+                      : formatSignedR(ruleSummary.netAverageRMultiple)}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Cumulative R</p>
+                  <p className="text-xs text-muted-foreground">Cumulative R (net)</p>
                   <p className="text-lg font-semibold tracking-tight">
                     {formatSignedR(ruleSummary.totalRMultiple)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {ruleSummary.netTotalRMultiple === null
+                      ? "—"
+                      : formatSignedR(ruleSummary.netTotalRMultiple)}
                   </p>
                 </div>
               </div>

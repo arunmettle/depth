@@ -83,6 +83,39 @@ describe("summarizeTrackRecord", () => {
     expect(summary.totalRMultiple).toBe(0);
     expect(summary.averageRMultiple).toBe(0);
   });
+
+  it("returns null net figures when resolved alerts have no trade plan", () => {
+    const summary = summarizeTrackRecord([
+      buildAlert({ id: "a", outcome: { status: "tp1_hit", rMultiple: 1 } }),
+    ]);
+
+    expect(summary.netAverageRMultiple).toBeNull();
+    expect(summary.netTotalRMultiple).toBeNull();
+  });
+
+  it("computes net-of-cost R figures using each alert's trade plan", () => {
+    const tradePlan = {
+      entryPrice: 100000,
+      riskReward1: 1,
+      riskReward2: 2,
+      signalHigh: 100010,
+      signalLow: 99250,
+      stopLoss: 99250,
+      takeProfit1: 100750,
+      takeProfit2: 101500,
+      triggerPrice: 100000,
+    };
+
+    const summary = summarizeTrackRecord([
+      buildAlert({ id: "a", outcome: { status: "tp1_hit", rMultiple: 1 }, tradePlan }),
+      buildAlert({ id: "b", outcome: { status: "stop_hit", rMultiple: -1 }, tradePlan }),
+    ]);
+
+    expect(summary.netAverageRMultiple).not.toBeNull();
+    expect(summary.netTotalRMultiple).not.toBeNull();
+    // Costs always reduce net R relative to gross R, on both wins and losses.
+    expect(summary.netTotalRMultiple as number).toBeLessThan(summary.totalRMultiple);
+  });
 });
 
 describe("summarizeTrackRecordByRuleType", () => {

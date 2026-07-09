@@ -1,4 +1,5 @@
 import type { AlertRecord } from "@/lib/history/schema";
+import { computeNetRMultiple } from "@/lib/history/trading-costs";
 
 export type TrackRecordPoint = {
   createdAt: string;
@@ -11,6 +12,8 @@ export type TrackRecordSummary = {
   equityCurve: TrackRecordPoint[];
   expiredCount: number;
   losses: number;
+  netAverageRMultiple: number | null;
+  netTotalRMultiple: number | null;
   pendingCount: number;
   resolvedCount: number;
   totalRMultiple: number;
@@ -40,6 +43,8 @@ export function summarizeTrackRecord(items: AlertRecord[]): TrackRecordSummary {
   let pendingCount = 0;
   let totalR = 0;
   let cumulativeR = 0;
+  let netTotalR = 0;
+  let netResolvedCount = 0;
 
   const equityCurve: TrackRecordPoint[] = [];
 
@@ -59,6 +64,12 @@ export function summarizeTrackRecord(items: AlertRecord[]): TrackRecordSummary {
     const rMultiple = outcome.rMultiple ?? 0;
     totalR += rMultiple;
     cumulativeR += rMultiple;
+
+    const netRMultiple = computeNetRMultiple(item);
+    if (netRMultiple !== null) {
+      netTotalR += netRMultiple;
+      netResolvedCount += 1;
+    }
 
     if (outcome.status === "tp1_hit" || outcome.status === "tp2_hit") {
       wins += 1;
@@ -80,6 +91,8 @@ export function summarizeTrackRecord(items: AlertRecord[]): TrackRecordSummary {
     equityCurve,
     expiredCount,
     losses,
+    netAverageRMultiple: netResolvedCount > 0 ? netTotalR / netResolvedCount : null,
+    netTotalRMultiple: netResolvedCount > 0 ? netTotalR : null,
     pendingCount,
     resolvedCount,
     totalRMultiple: totalR,
