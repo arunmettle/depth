@@ -16,6 +16,8 @@ engine/.air.toml
 engine/data/
 engine/.backfill-cache/
 
+_bt_cache/
+
 .idea/
 .vscode/
 

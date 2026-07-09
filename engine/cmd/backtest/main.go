@@ -17,6 +17,12 @@
 //
 // Add -cache-dir to reuse (or build) a local raw-archive cache shared with
 // cmd/backfill, and -out to also write a CSV of every individual signal.
+//
+// Add -save-supabase to also insert the run's headline summary into
+// Supabase's public.backtest_runs table (read by the web app's public
+// backtest page), using SUPABASE_URL and SUPABASE_SECRET_KEY from the
+// environment - the same credentials and REST convention the live engine
+// already uses.
 package main
 
 import (
@@ -50,6 +56,7 @@ func main() {
 	trapSide := flag.String("trap-side", "both", "trapped_traders: buyers, sellers, or both")
 	cacheDir := flag.String("cache-dir", "", "optional directory to cache raw daily archives, shared with cmd/backfill")
 	outPath := flag.String("out", "", "optional path to write a CSV of every individual signal")
+	saveSupabase := flag.Bool("save-supabase", false, "insert the run's headline summary into Supabase's public.backtest_runs table")
 	flag.Parse()
 
 	if *symbol == "" || *fromFlag == "" || *toFlag == "" {
@@ -76,7 +83,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := run(rule, from, to, *cacheDir, *outPath); err != nil {
+	if err := run(rule, from, to, *cacheDir, *outPath, *saveSupabase); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -109,7 +116,7 @@ func buildRule(symbol string, ruleType string, timeframe string, confirmationRow
 	return rule, nil
 }
 
-func run(rule evaluator.Rule, from time.Time, to time.Time, cacheDir string, outPath string) error {
+func run(rule evaluator.Rule, from time.Time, to time.Time, cacheDir string, outPath string, saveSupabase bool) error {
 	if cacheDir != "" {
 		if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 			return fmt.Errorf("create cache dir: %w", err)
@@ -154,7 +161,44 @@ func run(rule evaluator.Rule, from time.Time, to time.Time, cacheDir string, out
 		log.Printf("wrote %d signals to %s", len(signals), outPath)
 	}
 
+	if saveSupabase {
+		if err := saveToSupabase(ctx, rule, from, to, totalTrades, summary); err != nil {
+			return fmt.Errorf("save backtest run to Supabase: %w", err)
+		}
+		log.Printf("saved backtest run summary to Supabase backtest_runs")
+	}
+
 	return nil
+}
+
+func saveToSupabase(ctx context.Context, rule evaluator.Rule, from time.Time, to time.Time, totalTrades int, summary backtest.Summary) error {
+	url := os.Getenv("SUPABASE_URL")
+	secretKey := os.Getenv("SUPABASE_SECRET_KEY")
+
+	writer := backtest.NewSupabaseWriter(url, secretKey)
+	if !writer.IsConfigured() {
+		return fmt.Errorf("SUPABASE_URL and SUPABASE_SECRET_KEY must both be set to use -save-supabase")
+	}
+
+	params := map[string]any{}
+	if rule.StackedImbalance != nil {
+		params["confirmationRows"] = rule.StackedImbalance.ConfirmationRows
+		params["thresholdMultiplier"] = rule.StackedImbalance.ThresholdMultiplier
+	}
+	if rule.TrappedTraders != nil {
+		params["minAbsorptionVolume"] = rule.TrappedTraders.MinAbsorptionVolume
+		params["trapSide"] = rule.TrappedTraders.TrapSide
+	}
+
+	return writer.SaveRun(ctx, backtest.Run{
+		Symbol:              rule.MarketSymbol,
+		RuleType:            rule.RuleType,
+		Timeframe:           rule.Timeframe,
+		Params:              params,
+		PeriodStart:         from,
+		PeriodEnd:           to,
+		TotalTradesReplayed: totalTrades,
+	}, summary)
 }
 
 func printSummary(rule evaluator.Rule, summary backtest.Summary) {
