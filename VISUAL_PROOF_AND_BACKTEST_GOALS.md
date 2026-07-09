@@ -301,6 +301,68 @@ regime segmentation) a trustworthy backtest needs. Those are the next steps
 before this can back a "backtested across 5 years" claim or a
 before-you-go-live validation gate for custom rules.
 
+### Goal VP3 Status Update: Backtest Runner (Done)
+
+Built the piece the data pipeline above was foundation for: a runner that
+replays historical trades through the *exact* production `evaluator.Evaluate`
+code path (not a reimplementation) and resolves each resulting signal's real
+outcome using the *exact* production `outcome.EvaluateCandle` stop/TP
+hit-order logic real, live-delivered alerts are resolved with. A historical
+win rate produced by this runner is therefore directly comparable to a live
+one — same rule-matching code, same outcome-resolution code, same net-of-fees
+cost model.
+
+Two behavioral details this had to get right to genuinely match live, not
+just approximate it:
+
+- **Evaluate runs after every trade, not just on candle close.** The live
+  stream (`bybit.PublicTradeStream.evaluateRulesForSymbol`) calls
+  `evaluator.Evaluate` after every single trade update, since
+  stacked-imbalance/trapped-traders signals can fire mid-candle as running
+  volume ratios cross a threshold. `backtest.Runner.ReplayDay` does the
+  same — call `Evaluate` once per trade, not once per closed candle.
+- **Outcome resolution has to respect the same 48h resolution window** live
+  alerting uses (`outcome.DefaultResolutionWindow`, now exported for this
+  reuse) — without this cap, a backtest could credit a "win" to a signal
+  that only resolved days later, which live alerting would already have
+  marked `expired` well before then.
+
+What shipped:
+
+- `engine/internal/backtest.Runner` — replays trades through a dedicated
+  `marketstate.State` + `evaluator.Evaluator`, recording every `Event` the
+  rule fires, then resolves each one's real outcome against the replayed
+  candle history via `outcome.EvaluateCandle`
+- `engine/internal/backtest.Summarize` — aggregates signals into the same
+  headline numbers the web Track Record card shows (win rate, gross/net avg
+  R, cumulative R), using the same 0.15% realistic round-trip cost model as
+  `web/lib/history/trading-costs.ts`
+- `engine/internal/outcome.EvaluateCandle` and `.DefaultResolutionWindow`
+  exported specifically for this reuse, so the exact same stop/TP
+  hit-order rule and time cutoff apply to both live and historical
+  resolution
+- `engine/cmd/backtest` — a CLI (`go run ./cmd/backtest -symbol BTCUSDT
+  -from 2024-01-01 -to 2024-01-31 -rule-type stacked_imbalance -timeframe 1m
+  -confirmation-rows 3 -threshold-multiplier 300`) that downloads the date
+  range, runs the backtest, and prints a summary (with a `< 30 resolved
+  signals` sample-size warning), optionally writing every individual signal
+  to a CSV via `-out`
+- 5 new tests in `engine/internal/backtest` (TP1 win, stop loss, inactive
+  rule, expired-with-no-further-history, and summary aggregation), all
+  passing; full engine suite still green
+- validated end-to-end against 7 real days of live BTCUSDT data (June 2024,
+  ~7.49M ticks): 936 signals generated, 904 resolved (44.9% win rate,
+  -0.10 gross avg R, -0.30 net avg R after costs) — numbers in the same
+  realistic range as the live post-fix track record, not a suspiciously
+  perfect backtest
+
+Still missing before this can back a "backtested across 5 years" marketing
+claim or a before-you-go-live validation gate for custom rules: the
+statistical-rigor layer (walk-forward validation, confidence intervals on
+win rate, regime segmentation across bull/bear/chop years, an explicit
+look-ahead-bias test) and an actual multi-year backfill run to see whether
+either rule type has a real edge over enough history to trust.
+
 ### Goal VP4: True Historical Heatmap / Footprint
 
 Now unblocked on the data side (Bybit's `orderbook.{depth}.{symbol}` feed is

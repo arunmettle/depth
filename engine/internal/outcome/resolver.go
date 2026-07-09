@@ -28,11 +28,14 @@ const (
 )
 
 const (
-	// defaultResolutionWindow bounds how long we keep checking an alert for
+	// DefaultResolutionWindow bounds how long we keep checking an alert for
 	// a real outcome before giving up and marking it expired. This keeps
 	// the pending queue bounded and avoids implying an alert is still
-	// "live" indefinitely.
-	defaultResolutionWindow = 48 * time.Hour
+	// "live" indefinitely. Exported so engine/internal/backtest can apply
+	// the exact same cutoff to historical signals - without it, a
+	// backtest could credit a "win" to a signal that only resolved days
+	// later, a outcome live alerting would have already marked expired.
+	DefaultResolutionWindow = 48 * time.Hour
 
 	// defaultMinAge ensures at least one candle has had a chance to close
 	// after the alert fired before we bother fetching klines for it.
@@ -105,7 +108,7 @@ func NewResolver(klineFetcher KlineFetcher, store AlertStore, logger *slog.Logge
 		store:            store,
 		logger:           logger,
 		now:              time.Now,
-		resolutionWindow: defaultResolutionWindow,
+		resolutionWindow: DefaultResolutionWindow,
 		minAge:           defaultMinAge,
 		batchLimit:       defaultBatchLimit,
 	}
@@ -179,7 +182,7 @@ func (r *Resolver) resolveOne(ctx context.Context, alert PendingAlert) (Result, 
 	}
 
 	for _, candle := range candles {
-		if result, hit := evaluateCandle(alert, candle); hit {
+		if result, hit := EvaluateCandle(alert, candle); hit {
 			return result, nil
 		}
 	}
@@ -205,13 +208,19 @@ func (r *Resolver) resolveOne(ctx context.Context, alert PendingAlert) (Result, 
 	return Result{AlertID: alert.ID, Status: StatusPending}, nil
 }
 
-// evaluateCandle checks a single real candle against the trade plan. If
+// EvaluateCandle checks a single real candle against the trade plan. If
 // both a stop and a take-profit level are breached within the same candle,
 // the stop always wins: we cannot know the true intra-candle order, and
 // assuming the worse outcome keeps the track record honest rather than
 // overclaiming wins. Likewise TP2 is only reported once TP1 has genuinely
 // been passed.
-func evaluateCandle(alert PendingAlert, candle klines.Kline) (Result, bool) {
+//
+// Exported so the historical backtest runner (engine/internal/backtest) can
+// resolve outcomes for simulated historical alerts using the exact same
+// stop/TP hit-order logic real, live-delivered alerts are resolved with -
+// deliberately avoiding a second, potentially drifting implementation of
+// this rule.
+func EvaluateCandle(alert PendingAlert, candle klines.Kline) (Result, bool) {
 	isSell := strings.EqualFold(alert.Side, "sell")
 
 	var stopBreached, tp1Breached, tp2Breached bool
