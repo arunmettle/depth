@@ -398,11 +398,12 @@ func BuildTradePlan(candles []marketstate.Candle, side string) (TradePlan, bool)
 	}
 
 	entry := candles[len(candles)-1].Close
+	floor := minimumRiskDistance(entry)
 	switch side {
 	case "buy":
 		risk := entry - signalLow
-		if risk <= 0 {
-			risk = minimumRiskDistance(entry)
+		if risk < floor {
+			risk = floor
 		}
 
 		return TradePlan{
@@ -418,8 +419,8 @@ func BuildTradePlan(candles []marketstate.Candle, side string) (TradePlan, bool)
 		}, true
 	case "sell":
 		risk := signalHigh - entry
-		if risk <= 0 {
-			risk = minimumRiskDistance(entry)
+		if risk < floor {
+			risk = floor
 		}
 
 		return TradePlan{
@@ -438,12 +439,23 @@ func BuildTradePlan(candles []marketstate.Candle, side string) (TradePlan, bool)
 	}
 }
 
+// minimumViableRiskPercent is the smallest stop distance (as a fraction of
+// entry price) BuildTradePlan will ever use, applied unconditionally rather
+// than only as a degenerate-case fallback. Real trading round-trips this
+// order on Bybit cost roughly 0.11-0.15% of notional (taker fees plus
+// slippage). A stop distance any tighter than that lets trading costs alone
+// exceed 1R, turning an on-paper profitable signal into a guaranteed loser
+// once fees and slippage are applied. 0.75% keeps costs to a modest slice of
+// 1R with room to spare; see docs/PROFITABILITY_AFTER_COSTS.md for the
+// analysis that motivated this floor.
+const minimumViableRiskPercent = 0.0075
+
 func minimumRiskDistance(entry float64) float64 {
 	if entry <= 0 {
 		return 1
 	}
 
-	return math.Max(entry*0.0005, 1)
+	return math.Max(entry*minimumViableRiskPercent, 1)
 }
 
 func duplicateKey(ruleID string, bucketStart time.Time, side string) string {

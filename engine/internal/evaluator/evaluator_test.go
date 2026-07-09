@@ -1,6 +1,7 @@
 package evaluator
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -41,11 +42,11 @@ func TestEvaluateEmitsStackedImbalanceEvent(t *testing.T) {
 		t.Fatalf("unexpected event target: %s %s", event.Symbol, event.Timeframe)
 	}
 
-	if event.TradePlan.EntryPrice != 100010 || event.TradePlan.StopLoss != 100000 {
+	if event.TradePlan.EntryPrice != 100010 || event.TradePlan.StopLoss != 99259.925 {
 		t.Fatalf("unexpected trade plan core values: %+v", event.TradePlan)
 	}
 
-	if event.TradePlan.TakeProfit1 != 100020 || event.TradePlan.TakeProfit2 != 100030 {
+	if event.TradePlan.TakeProfit1 != 100760.075 || event.TradePlan.TakeProfit2 != 101510.15 {
 		t.Fatalf("unexpected trade plan targets: %+v", event.TradePlan)
 	}
 }
@@ -138,6 +139,46 @@ func TestEvaluateRejectsMixedSideWindow(t *testing.T) {
 
 	if ok || event != nil {
 		t.Fatalf("expected mixed side window to fail evaluation")
+	}
+}
+
+func TestBuildTradePlanEnforcesMinimumRiskFloorWhenSignalRangeIsTighter(t *testing.T) {
+	candles := []marketstate.Candle{
+		{High: 100010, Low: 100000, Close: 100010},
+	}
+
+	plan, ok := BuildTradePlan(candles, "buy")
+	if !ok {
+		t.Fatalf("expected trade plan to be built")
+	}
+
+	// Signal range is only 10 (0.01% of entry), far tighter than realistic
+	// round-trip trading costs. The floor must win over the raw candle risk.
+	wantRisk := 100010 * minimumViableRiskPercent
+	if got := plan.EntryPrice - plan.StopLoss; math.Abs(got-wantRisk) > 1e-9 {
+		t.Fatalf("expected floor-enforced risk %.4f, got %.4f", wantRisk, got)
+	}
+	if math.Abs(plan.TakeProfit1-(plan.EntryPrice+wantRisk)) > 1e-9 ||
+		math.Abs(plan.TakeProfit2-(plan.EntryPrice+(2*wantRisk))) > 1e-9 {
+		t.Fatalf("unexpected targets for floor-enforced risk: %+v", plan)
+	}
+}
+
+func TestBuildTradePlanUsesWiderSignalRiskWhenAboveFloor(t *testing.T) {
+	candles := []marketstate.Candle{
+		{High: 101000, Low: 99000, Close: 100000},
+	}
+
+	plan, ok := BuildTradePlan(candles, "sell")
+	if !ok {
+		t.Fatalf("expected trade plan to be built")
+	}
+
+	// Signal range (1000, 1% of entry) is wider than the floor, so the real
+	// candle-derived risk should be used unmodified.
+	wantRisk := 1000.0
+	if got := plan.StopLoss - plan.EntryPrice; got != wantRisk {
+		t.Fatalf("expected candle-derived risk %.4f, got %.4f", wantRisk, got)
 	}
 }
 
