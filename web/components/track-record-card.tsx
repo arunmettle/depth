@@ -1,5 +1,9 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  MINIMUM_TRUSTWORTHY_SAMPLE_SIZE,
+  partitionByFixTimeline,
+} from "@/lib/history/fix-timeline";
 import { getRuleTypeLabel } from "@/lib/history/presentation";
 import { summarizeTrackRecord, summarizeTrackRecordByRuleType } from "@/lib/history/track-record";
 import { REALISTIC_ROUND_TRIP_COST_PERCENT } from "@/lib/history/trading-costs";
@@ -43,13 +47,19 @@ export function TrackRecordCard({ items }: TrackRecordCardProps) {
   const path = buildSparklinePath(curveValues, 280, 72);
   const hasResolvedAlerts = summary.resolvedCount > 0;
 
+  const { postFix, preFix } = partitionByFixTimeline(items);
+  const postFixSummary = summarizeTrackRecord(postFix);
+  const hasPreFixData = preFix.length > 0;
+  const isPostFixSampleTrustworthy =
+    postFixSummary.resolvedCount >= MINIMUM_TRUSTWORTHY_SAMPLE_SIZE;
+
   return (
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline">Real price outcomes</Badge>
           <Badge variant={hasResolvedAlerts ? "default" : "secondary"}>
-            {summary.resolvedCount} resolved
+            {summary.resolvedCount} resolved{hasPreFixData ? " (all-time)" : ""}
           </Badge>
         </div>
         <CardTitle>Track record</CardTitle>
@@ -60,6 +70,66 @@ export function TrackRecordCard({ items }: TrackRecordCardProps) {
           trading costs (fees + slippage).
         </CardDescription>
       </CardHeader>
+      {hasPreFixData ? (
+        <CardContent>
+          <div className="rounded-xl border border-border bg-muted/40 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={isPostFixSampleTrustworthy ? "default" : "secondary"}>
+                {postFixSummary.resolvedCount} resolved post-fix
+              </Badge>
+              {!isPostFixSampleTrustworthy ? (
+                <Badge variant="outline">Still gathering data</Badge>
+              ) : null}
+            </div>
+            <p className="mt-2 text-sm font-medium">Post-fix track record</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              A stop-distance floor shipped on {new Date(
+                "2026-07-09T00:06:57Z"
+              ).toLocaleDateString()} so stops can survive real trading costs. The{" "}
+              {preFix.length} alert{preFix.length === 1 ? "" : "s"} recorded before that
+              change are included in the all-time stats below for completeness, but are
+              not representative of current performance -{" "}
+              {isPostFixSampleTrustworthy
+                ? "the figures below reflect fresh, post-fix data."
+                : `at least ${MINIMUM_TRUSTWORTHY_SAMPLE_SIZE} resolved post-fix alerts are needed before this sample is trustworthy.`}
+            </p>
+            <div className="mt-3 grid grid-cols-3 gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Win rate</p>
+                <p className="text-lg font-semibold tracking-tight">
+                  {postFixSummary.winRatePercent === null
+                    ? "—"
+                    : `${postFixSummary.winRatePercent.toFixed(0)}%`}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Avg R (net)</p>
+                <p className="text-lg font-semibold tracking-tight">
+                  {postFixSummary.averageRMultiple === null
+                    ? "—"
+                    : formatSignedR(postFixSummary.averageRMultiple)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {postFixSummary.netAverageRMultiple === null
+                    ? "—"
+                    : formatSignedR(postFixSummary.netAverageRMultiple)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Cumulative R (net)</p>
+                <p className="text-lg font-semibold tracking-tight">
+                  {formatSignedR(postFixSummary.totalRMultiple)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {postFixSummary.netTotalRMultiple === null
+                    ? "—"
+                    : formatSignedR(postFixSummary.netTotalRMultiple)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      ) : null}
       <CardContent className="grid gap-4 md:grid-cols-4">
         <div className="rounded-xl border border-border bg-background p-4">
           <p className="text-xs font-medium text-muted-foreground">Win rate</p>
