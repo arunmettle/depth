@@ -13,6 +13,8 @@ web/.env.production.local
 engine/bin/
 engine/.env
 engine/.air.toml
+engine/data/
+engine/.backfill-cache/
 
 .idea/
 .vscode/

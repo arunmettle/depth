@@ -255,6 +255,52 @@ Potential scope:
 - richer strategy evaluation
 - possible future fee/slippage-aware simulation
 
+### Goal VP3 Status Update: Historical Data Pipeline (Done)
+
+We previously assumed a real historical backtest engine was blocked on data
+availability — "we do not currently have long-range historical
+backtesting." That assumption was checked and turned out to be the same
+class of mistake as VP2.5's order-book assumption: it was never actually
+verified against what Bybit publishes.
+
+**Bybit publishes free, no-auth, tick-by-tick historical trade archives** at
+`https://public.bybit.com/trading/{symbol}/{symbol}{date}.csv.gz` — one
+gzip CSV per day, with exact trade price/side/size/timestamp. Coverage
+confirmed live: BTCUSDT back to 2020-03-25, ETHUSDT back to 2020-10-21 (5+
+years for both symbols we currently trade). Neither `stacked_imbalance` nor
+`trapped_traders` needs order-book depth to evaluate — both only consume
+trade price/side/size aggregated into candles (`marketstate.Candle`) — so
+this archive alone is sufficient to replay years of history through the
+exact same rule logic that runs live.
+
+What shipped:
+
+- `engine/internal/historicaldata` — downloads and parses daily archives
+  (`Client.FetchDailyArchiveBytes`, `ParseDailyArchive`) into
+  `marketstate.Trade` values
+- `historicaldata.Replayer` feeds historical trades through the *same*
+  `marketstate.State.UpdateTrade` code path the live engine uses, via
+  `ReplayDay`/`Flush` — a deliberate choice so backtest candle-bucketing can
+  never silently drift from what live alerts actually see (no separate
+  reimplementation to maintain or get out of sync)
+- `engine/cmd/backfill` — a CLI (`go run ./cmd/backfill -symbol BTCUSDT
+  -from 2024-01-01 -to 2024-01-31 -out ./data/BTCUSDT`) that downloads a
+  date range, replays it, and writes real 1m/5m/15m candle history (OHLC +
+  buy/sell volume) to CSV, with an optional `-cache-dir` so re-runs don't
+  re-download already-fetched days
+- validated end-to-end against live data: 2 real days of BTCUSDT (June
+  2024, ~1.04M ticks) replayed correctly into exactly 2,880 1m candles and
+  192 15m candles, with sane OHLC and buy/sell volume splits
+- 7 new tests in `engine/internal/historicaldata`, all passing; full engine
+  suite still green
+
+This is the data foundation only — it does not yet run `evaluator.Evaluate`
+against the cached candles, resolve outcomes against them, or add the
+statistical-rigor layer (walk-forward validation, confidence intervals,
+regime segmentation) a trustworthy backtest needs. Those are the next steps
+before this can back a "backtested across 5 years" claim or a
+before-you-go-live validation gate for custom rules.
+
 ### Goal VP4: True Historical Heatmap / Footprint
 
 Now unblocked on the data side (Bybit's `orderbook.{depth}.{symbol}` feed is
