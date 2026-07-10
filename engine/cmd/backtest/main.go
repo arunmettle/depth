@@ -57,6 +57,7 @@ func main() {
 	cacheDir := flag.String("cache-dir", "", "optional directory to cache raw daily archives, shared with cmd/backfill")
 	outPath := flag.String("out", "", "optional path to write a CSV of every individual signal")
 	saveSupabase := flag.Bool("save-supabase", false, "insert the run's headline summary into Supabase's public.backtest_runs table")
+	exitModeFlag := flag.String("exit-mode", "live-default", "live-default (matches production) or tp2-only (research variant: ignore TP1, ride to 2R or stop)")
 	flag.Parse()
 
 	if *symbol == "" || *fromFlag == "" || *toFlag == "" {
@@ -78,13 +79,29 @@ func main() {
 		log.Fatal("-to must not be before -from")
 	}
 
+	exitMode, err := parseExitMode(*exitModeFlag)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	rule, err := buildRule(*symbol, *ruleType, *timeframe, *confirmationRows, *thresholdMultiplier, *minAbsorptionVolume, *trapSide)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if err := run(rule, from, to, *cacheDir, *outPath, *saveSupabase); err != nil {
+	if err := run(rule, from, to, *cacheDir, *outPath, *saveSupabase, exitMode, *exitModeFlag); err != nil {
 		log.Fatal(err)
+	}
+}
+
+func parseExitMode(value string) (backtest.ExitMode, error) {
+	switch value {
+	case "live-default", "":
+		return backtest.ExitModeLiveDefault, nil
+	case "tp2-only":
+		return backtest.ExitModeTP2Only, nil
+	default:
+		return backtest.ExitModeLiveDefault, fmt.Errorf("unsupported -exit-mode %q (want live-default or tp2-only)", value)
 	}
 }
 
@@ -116,7 +133,7 @@ func buildRule(symbol string, ruleType string, timeframe string, confirmationRow
 	return rule, nil
 }
 
-func run(rule evaluator.Rule, from time.Time, to time.Time, cacheDir string, outPath string, saveSupabase bool) error {
+func run(rule evaluator.Rule, from time.Time, to time.Time, cacheDir string, outPath string, saveSupabase bool, exitMode backtest.ExitMode, exitModeLabel string) error {
 	if cacheDir != "" {
 		if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 			return fmt.Errorf("create cache dir: %w", err)
@@ -125,7 +142,7 @@ func run(rule evaluator.Rule, from time.Time, to time.Time, cacheDir string, out
 
 	client := historicaldata.NewClient()
 	ctx := context.Background()
-	runner := backtest.NewRunner(rule)
+	runner := backtest.NewRunner(rule, backtest.WithExitMode(exitMode))
 
 	totalTrades := 0
 	totalDays := 0
@@ -148,8 +165,8 @@ func run(rule evaluator.Rule, from time.Time, to time.Time, cacheDir string, out
 	summary := backtest.Summarize(signals)
 
 	log.Printf(
-		"done: %s, %d days, %d total trades replayed, %d signals generated",
-		rule.MarketSymbol, totalDays, totalTrades, summary.TotalSignals,
+		"done: %s, %d days, %d total trades replayed, %d signals generated (exit-mode=%s)",
+		rule.MarketSymbol, totalDays, totalTrades, summary.TotalSignals, exitModeLabel,
 	)
 
 	printSummary(rule, summary)
@@ -162,7 +179,7 @@ func run(rule evaluator.Rule, from time.Time, to time.Time, cacheDir string, out
 	}
 
 	if saveSupabase {
-		if err := saveToSupabase(ctx, rule, from, to, totalTrades, summary); err != nil {
+		if err := saveToSupabase(ctx, rule, from, to, totalTrades, summary, exitModeLabel); err != nil {
 			return fmt.Errorf("save backtest run to Supabase: %w", err)
 		}
 		log.Printf("saved backtest run summary to Supabase backtest_runs")
@@ -171,7 +188,7 @@ func run(rule evaluator.Rule, from time.Time, to time.Time, cacheDir string, out
 	return nil
 }
 
-func saveToSupabase(ctx context.Context, rule evaluator.Rule, from time.Time, to time.Time, totalTrades int, summary backtest.Summary) error {
+func saveToSupabase(ctx context.Context, rule evaluator.Rule, from time.Time, to time.Time, totalTrades int, summary backtest.Summary, exitModeLabel string) error {
 	url := os.Getenv("SUPABASE_URL")
 	secretKey := os.Getenv("SUPABASE_SECRET_KEY")
 
@@ -180,7 +197,7 @@ func saveToSupabase(ctx context.Context, rule evaluator.Rule, from time.Time, to
 		return fmt.Errorf("SUPABASE_URL and SUPABASE_SECRET_KEY must both be set to use -save-supabase")
 	}
 
-	params := map[string]any{}
+	params := map[string]any{"exitMode": exitModeLabel}
 	if rule.StackedImbalance != nil {
 		params["confirmationRows"] = rule.StackedImbalance.ConfirmationRows
 		params["thresholdMultiplier"] = rule.StackedImbalance.ThresholdMultiplier

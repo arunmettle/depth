@@ -29,6 +29,52 @@ type Signal struct {
 	Outcome outcome.Result
 }
 
+// ExitMode controls how a signal's outcome is resolved. ExitModeLiveDefault
+// exactly matches production live alerting (outcome.EvaluateCandle's
+// first-touch stop/TP1/TP2 rule) and is what cmd/backtest and the public
+// /backtest page always use. Other modes are research-only variants for
+// engine/cmd/backtest-sweep to explore whether a different exit rule would
+// have produced a real edge - never used for the published track record
+// unless and until a variant is deliberately promoted to production.
+type ExitMode int
+
+const (
+	// ExitModeLiveDefault resolves exactly like production: stop, else
+	// TP2, else TP1, whichever is touched first.
+	ExitModeLiveDefault ExitMode = iota
+	// ExitModeTP2Only ignores a TP1 touch (treats it as still open) and
+	// only exits on a stop or TP2 touch, or expiry - testing whether
+	// letting winners run to a full 2R target beats taking many capped
+	// 1R wins once realistic costs are applied.
+	ExitModeTP2Only
+)
+
+// TrendFilter decides whether a fired Event should be kept, given the
+// replay state at the moment it fired. Returning false discards the event
+// entirely, as if the rule had never fired - used to test whether aligning
+// signals with a broader trend improves the real edge. nil means no
+// filtering (matches production).
+type TrendFilter func(state *marketstate.State, event evaluator.Event) bool
+
+// RunnerOption configures research-only Runner behavior. The zero value of
+// Runner (no options) always matches production live-alerting behavior.
+type RunnerOption func(*Runner)
+
+// WithExitMode overrides how signals are resolved. Research-only; never
+// used by cmd/backtest's default (published) run.
+func WithExitMode(mode ExitMode) RunnerOption {
+	return func(r *Runner) {
+		r.exitMode = mode
+	}
+}
+
+// WithTrendFilter discards fired events that don't pass filter. Research-only.
+func WithTrendFilter(filter TrendFilter) RunnerOption {
+	return func(r *Runner) {
+		r.trendFilter = filter
+	}
+}
+
 // Runner replays historical trades through a dedicated marketstate.State +
 // evaluator.Evaluator pair - never the live engine's shared state - and
 // records every Event the rule would have fired, exactly mirroring how
@@ -37,16 +83,19 @@ type Signal struct {
 // stacked-imbalance and trapped-traders signals can fire mid-candle as
 // running volume ratios cross a threshold.
 type Runner struct {
-	rule      evaluator.Rule
-	state     *marketstate.State
-	evaluator *evaluator.Evaluator
-	events    []evaluator.Event
-	candles   map[string][]marketstate.Candle
+	rule        evaluator.Rule
+	state       *marketstate.State
+	evaluator   *evaluator.Evaluator
+	events      []evaluator.Event
+	candles     map[string][]marketstate.Candle
+	exitMode    ExitMode
+	trendFilter TrendFilter
 }
 
 // NewRunner creates a Runner that evaluates a single rule as historical
-// trades are replayed through it via ReplayDay.
-func NewRunner(rule evaluator.Rule) *Runner {
+// trades are replayed through it via ReplayDay. With no options, behavior
+// exactly matches production live alerting.
+func NewRunner(rule evaluator.Rule, opts ...RunnerOption) *Runner {
 	state := marketstate.New()
 
 	r := &Runner{
@@ -60,6 +109,10 @@ func NewRunner(rule evaluator.Rule) *Runner {
 		r.candles[candle.Timeframe] = append(r.candles[candle.Timeframe], candle)
 	})
 
+	for _, opt := range opts {
+		opt(r)
+	}
+
 	return r
 }
 
@@ -72,6 +125,10 @@ func (r *Runner) ReplayDay(trades []marketstate.Trade) {
 
 		event, ok := r.evaluator.Evaluate(r.rule)
 		if !ok || event == nil {
+			continue
+		}
+
+		if r.trendFilter != nil && !r.trendFilter(r.state, *event) {
 			continue
 		}
 
@@ -100,7 +157,7 @@ func (r *Runner) Signals() []Signal {
 	for _, event := range r.events {
 		signals = append(signals, Signal{
 			Event:   event,
-			Outcome: resolveOutcome(event, r.candles[event.Timeframe]),
+			Outcome: resolveOutcome(event, r.candles[event.Timeframe], r.exitMode),
 		})
 	}
 
@@ -114,7 +171,7 @@ func (r *Runner) Signals() []Signal {
 // that produced the signal), for up to outcome.DefaultResolutionWindow,
 // applying the exact same stop/TP hit-order rule real alerts are resolved
 // with.
-func resolveOutcome(event evaluator.Event, candles []marketstate.Candle) outcome.Result {
+func resolveOutcome(event evaluator.Event, candles []marketstate.Candle, exitMode ExitMode) outcome.Result {
 	alert := outcome.PendingAlert{
 		ID:           fmt.Sprintf("%s@%s", event.RuleID, event.BucketStart.UTC().Format(time.RFC3339)),
 		MarketSymbol: event.Symbol,
@@ -148,9 +205,19 @@ func resolveOutcome(event evaluator.Event, candles []marketstate.Candle) outcome
 			Close:     candle.Close,
 		}
 
-		if result, hit := outcome.EvaluateCandle(alert, kline); hit {
-			return result
+		result, hit := outcome.EvaluateCandle(alert, kline)
+		if !hit {
+			continue
 		}
+
+		// ExitModeTP2Only is a research variant: a TP1 touch alone isn't
+		// treated as an exit, so the position keeps riding toward the
+		// full 2R target (or a stop) instead of banking a capped 1R win.
+		if exitMode == ExitModeTP2Only && result.Status == outcome.StatusTP1Hit {
+			continue
+		}
+
+		return result
 	}
 
 	return outcome.Result{
