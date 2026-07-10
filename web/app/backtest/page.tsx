@@ -62,6 +62,15 @@ export default async function BacktestPage() {
             Net R already includes a realistic 0.15% round-trip trading
             cost.
           </p>
+          <p className="max-w-2xl rounded-lg border border-dashed border-border px-3 py-2 text-sm leading-6 text-muted-foreground">
+            Our own walk-forward validation (separate training and
+            out-of-sample windows) has not yet found a robust edge for
+            these rules after realistic costs. We show these results
+            openly rather than hide them: Sentinel Flow is an order-flow
+            context and awareness tool - it shows you what is happening in
+            the order flow clearly and fast - not a guarantee that
+            following an alert is profitable.
+          </p>
         </div>
 
         {runs.length === 0 ? (

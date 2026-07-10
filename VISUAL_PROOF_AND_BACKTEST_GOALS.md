@@ -400,6 +400,87 @@ What it does:
 This does not replace a full historical backtest engine (see VP3) — it only
 tells you what really happened to alerts that were actually sent.
 
+### Goal VP6: Walk-Forward Validation And The Alpha-Alerts Pivot (Done)
+
+VP3's backtest runner made it possible to finally ask the real question
+honestly: does either live rule (`stacked_imbalance`, `trapped_traders`)
+have a robust edge, or does it only look good on whichever window you
+happen to test?
+
+What we built and ran:
+
+- `engine/internal/backtest.ExitMode`/`TrendFilter`/`RunnerOption` -
+  research-only extensibility (exit-mode variants, trend/quality filters)
+  layered on top of the runner without changing production behavior
+- `engine/internal/backtest.quality.go` - a 0-100 trade-quality composite
+  score (displacement strength, volume confirmation, session weighting),
+  implementing the "don't enter every imbalance, score the setup" idea
+- `engine/cmd/backtest-sweep` - an exploratory single-window parameter
+  sweep. **This tool proved capable of pure overfitting**: its "best"
+  config on a 14-day window (+0.38 net avg R) collapsed to exactly a
+  coin-flip (+0.00 gross R) on a separate out-of-sample month. Its output
+  should never be trusted or published on its own.
+- `engine/cmd/backtest-validate` - the tool that actually matters: a
+  40-candidate grid (4 base rules x 2 exit modes x 5 quality thresholds),
+  requiring net-positive average R on **both** a training window and a
+  separate out-of-sample validation window before a config counts as
+  passing.
+
+Result on BTCUSDT (train: Jan 1-14 2024, validate: March 2024, ~85M real
+trades replayed): **0 of 40 candidates passed.** Quality scoring and a
+"ride to full TP2" exit mode did not rescue any variant. This is a
+conclusive negative result for trade-tape-only signals at 1-15m on this
+symbol/period - not proof no edge can ever exist, but proof this specific,
+already-live rule set does not have one after realistic costs.
+
+We also investigated whether real L2 order-book depth (not just the trade
+tape) could unlock a genuine edge, since real footprint/absorption alpha
+typically needs queue-level data:
+
+- confirmed Bybit's free public archive has no historical L2/depth data
+  (only trade tape, klines, index prices)
+- Tardis.dev sells it (Bybit `incremental_book_L2` since 2020-05-28,
+  ~$20-40/mo Solo tier, free 1-day-per-month CSV samples)
+- built `engine/internal/l2book` to reconstruct a real order book and
+  compute top-of-book imbalance from a Tardis CSV, verified against a free
+  sample day (Bybit BTCUSDT, 2024-01-01: 22.9M raw book updates -> 84,175
+  one-second imbalance snapshots)
+- **found a genuine, statistically real signal** (correlation 0.05-0.26
+  between imbalance and forward return depending on horizon, monotonic
+  decile relationship) - unlike the trade-tape rules above, this is not
+  noise
+- but the effect size is tiny: 0.5-2 bps at 5s-300s horizons, smaller than
+  Bybit's own round-trip taker fees (~11bps) and far below what this
+  product's alert-holding-periods (minutes to hours, 30-200+bps targets)
+  need. This is a real but HFT-scale signal, not tradeable standalone by a
+  cloud-hosted alerting product regardless of budget - it would need
+  co-located infrastructure and maker-rebate economics to capture directly.
+
+### The Pivot Decision
+
+Given both findings - no edge in the live trade-tape rules, and a real but
+untradeable-at-this-product's-timescale L2 signal - the honest choice is to
+stop presenting this product as an "alpha alerts" / guaranteed-edge service.
+
+**Sentinel Flow is repositioned as an order-flow context and awareness
+tool**, not a profitability guarantee:
+
+- alerts and proof visuals show *what is happening* in the order flow
+  (imbalance, absorption, trapped positions) clearly and fast - that part
+  of the product is real and already works well
+- the product does not claim, and the `/backtest` page and billing copy
+  should not imply, that following these alerts is proven to be
+  profitable - our own walk-forward validation says otherwise for the
+  current rule set
+- monetization stays viable on this honest framing: traders already pay
+  for order-flow context/visualization tools (e.g. Bookmap-style products)
+  without expecting a packaged, guaranteed edge
+- `L2ImbalanceFilter` (in `engine/internal/backtest/l2filter.go`) and the
+  L2 book-reconstruction groundwork are kept as-is for future research
+  (e.g. as a confirming layer on top of a rule, if one is ever found to
+  have a real edge), but no further external data spend is planned for now
+  - see the `goal4-orderbook-data` and `goal6-pivot-decision` todos
+
 ## Decision Notes
 
 - No fake heatmap visuals

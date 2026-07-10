@@ -37,9 +37,9 @@ export const billingPlans: Record<BillingPlanKey, BillingPlan> = {
     activeRuleLimit: null,
     ctaLabel: "Contact launch team",
     description:
-      "Community broadcast rights, exports, and white-labeled delivery for premium alpha operators.",
+      "Community broadcast rights, exports, and white-labeled delivery for teams building on top of Sentinel Flow's order-flow context.",
     launchBadge: null,
-    name: "Alpha Stream",
+    name: "Signal Broadcast",
     priceLabel: "$149+/mo",
     rank: 4,
   },
